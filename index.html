@@ -140,6 +140,8 @@ label.field + .link-btn{margin-top:12px;padding-left:0}
 label.check{display:flex;align-items:flex-start;gap:10px;margin-top:18px;font-size:.85rem;color:var(--ink-2);line-height:1.6;letter-spacing:0}
 label.check input{margin:5px 0 0;accent-color:var(--ink);flex:none}
 .model-tag{margin-left:auto;font-size:.68rem;color:var(--ink-3);letter-spacing:.02em}
+.model-tag + .model-tag{margin-left:10px}
+a.model-tag{color:var(--ai);text-decoration:none}
 .toast{position:fixed;left:50%;bottom:calc(28px + env(safe-area-inset-bottom));transform:translateX(-50%);
   background:var(--ink);color:var(--paper);padding:10px 18px;border-radius:2px;font-size:.86rem;z-index:40;letter-spacing:.03em;
   opacity:0;pointer-events:none;transition:opacity .25s;max-width:90vw}
@@ -475,6 +477,7 @@ async function processMemo(id){
   saveMemos(); render();
   if (openId === id) openDetail(id);
   if (m.status === 'error') toast(m.err);
+  if (m.status === 'done' && cfg.gdocAuto !== false && gdocReady() && !m.gdoc) sendToDocs(m, true);
 }
 
 /* ---------- 목록 ---------- */
@@ -581,7 +584,7 @@ async function openDetail(id){
   if (m.status === 'done'){
     const c = r.check || {};
     body = `
-      <div class="meta"><span class="cat-dot" id="detailDot" style="background:${catColor(r.category)}"></span><span id="detailCat">${esc(r.category)}</span> ${fmtDate(m.created)}${m.model ? ` <span class="model-tag">${esc(m.model)}</span>` : ''}</div>
+      <div class="meta"><span class="cat-dot" id="detailDot" style="background:${catColor(r.category)}"></span><span id="detailCat">${esc(r.category)}</span> ${fmtDate(m.created)}${m.model ? ` <span class="model-tag">${esc(m.model)}</span>` : ''}${m.gdoc ? ` <a class="model-tag" href="${esc(m.gdoc.url || '#')}" target="_blank" rel="noopener">독스 ✓</a>` : ''}</div>
       <div class="title-row"><h2 id="detailTitle">${esc(r.title)}</h2><button class="link-btn" data-act="edittitle">제목 고치기</button></div>
       <div class="cat-edit" aria-label="분류 바꾸기">${CATS.map(c =>
         `<button class="chip" data-cat="${c.k}" aria-pressed="${c.k === r.category}">${c.k}</button>`).join('')}</div>
@@ -607,7 +610,7 @@ async function openDetail(id){
   const canRedo = m.status !== 'working' && !(m.kind === 'voice' && m.noAudio);
   body += `<div class="actions">
     ${canRedo ? `<button class="btn primary" data-act="redo">${m.status === 'done' ? '다시 정리' : '정리하기'}</button>` : ''}
-    ${m.status === 'done' ? `<button class="btn" data-act="copy">글로 복사</button><button class="btn" data-act="ppt">PPT 만들기</button>` : ''}
+    ${m.status === 'done' ? `<button class="btn" data-act="copy">글로 복사</button><button class="btn" data-act="ppt">PPT 만들기</button>${gdocReady() ? `<button class="btn" data-act="gdoc">${m.gdoc ? '독스에 다시 보내기' : '구글 독스로'}</button>` : ''}` : ''}
     <button class="btn danger" data-act="del">삭제</button>
     <button class="btn" data-act="close">닫기</button>
   </div>`;
@@ -647,6 +650,9 @@ $('#sheetBody').onclick = e => {
   if (act === 'import') return $('#importFile').click();
   if (act === 'purgeaudio') return purgeAudio();
   if (act === 'loadmodels') return loadModels();
+  if (act === 'gdoc') return sendToDocs(m);
+  if (act === 'gdoctest') return testDocs();
+  if (act === 'gdocall') return sendAllToDocs();
   if (act === 'savetext') return saveTextMemo();
   if (act === 'resetguide'){ $('#cfgGuide').value = DEFAULT_GUIDE; }
 };
@@ -672,6 +678,57 @@ function copyMemo(m){
   const li = a => arr(a).map(x => '- ' + x).join('\n') || '- 없음';
   const md = `# ${r.title}\n${r.category} | ${fmtDate(m.created)}\n\n## 내가 한 말\n${r.transcript || m.text}\n\n## 핵심\n${li(r.points)}\n\n## AI 체크\n살릴 점\n${li(c.good)}\n비어 있는 곳\n${li(c.weak)}\n생각해볼 질문\n${li(c.questions)}\n\n## 덧붙인 방향 (AI)\n${li(r.extend)}${r.draft ? '\n\n## 초안 (AI)\n' + r.draft : ''}`;
   copyText(md).then(ok => toast(ok ? '복사했습니다' : '복사에 실패했습니다. 길게 눌러 직접 복사해 주세요'));
+}
+
+/* ---------- 구글 독스 연동 (Apps Script 웹앱으로 전송) ----------
+   설정에 붙여넣은 웹앱 URL로 정리된 메모를 JSON으로 POST 한다.
+   헤더를 붙이지 않은 단순 요청이라 CORS 사전요청이 없고, 스크립트 쪽에서 메모 id로 중복을 걸러 재전송해도 안전하다. */
+const gdocReady = () => /^https:\/\/script\.google\.com\/macros\/s\/[\w-]+\/exec$/.test(cfg.gdocUrl || '');
+function memoPayload(m){
+  const r = m.r || {}, c = r.check || {};
+  return {
+    id: m.id, title: r.title || '제목 없음', category: r.category || '', created: fmtDate(m.created), createdAt: m.created,
+    kind: m.kind, model: m.model || '', tags: arr(r.tags),
+    transcript: r.transcript || m.text || '', points: arr(r.points),
+    good: arr(c.good), weak: arr(c.weak), questions: arr(c.questions), extend: arr(r.extend), draft: r.draft || ''
+  };
+}
+async function sendToDocs(m, quiet){
+  if (!gdocReady()){ if (!quiet) toast('설정에서 구글 독스 연동 URL을 먼저 넣어주세요'); return false; }
+  if (!m || m.status !== 'done') return false;
+  try{
+    const res = await fetch(cfg.gdocUrl, {method:'POST', body: JSON.stringify(memoPayload(m))});
+    const d = await res.json();
+    if (!d.ok) throw new Error(d.error || '스크립트가 실패를 돌려줬습니다');
+    m.gdoc = {at: Date.now(), url: d.url || ''};
+    saveMemos();
+    if (openId === m.id) openDetail(m.id);
+    if (!quiet) toast(d.dup ? '이미 독스에 있는 메모입니다' : '구글 독스에 보냈습니다');
+    return true;
+  }catch(e){
+    if (!quiet) toast('독스 전송 실패: ' + (e.message || e));
+    return false;
+  }
+}
+/* 아직 안 보낸 정리 완료 메모를 오래된 것부터 차례로 */
+async function sendAllToDocs(){
+  if (!gdocReady()){ toast('설정에서 구글 독스 연동 URL을 먼저 넣어주세요'); return; }
+  const list = memos.filter(m => m.status === 'done' && !m.gdoc).sort((a, b) => a.created - b.created);
+  if (!list.length){ toast('보낼 메모가 없습니다'); return; }
+  closeSheet(); toast(`${list.length}개를 보내는 중…`);
+  let n = 0;
+  for (const m of list){ if (await sendToDocs(m, true)) n++; }
+  render(); toast(`${n}개를 구글 독스에 보냈습니다${n < list.length ? ` (${list.length - n}개 실패)` : ''}`);
+}
+async function testDocs(){
+  const url = $('#cfgGdoc').value.trim();
+  if (!/^https:\/\/script\.google\.com\/macros\/s\/[\w-]+\/exec$/.test(url)){ toast('URL 형식이 다릅니다. …/exec 로 끝나는 웹앱 URL을 넣어주세요'); return; }
+  toast('연결 확인 중…');
+  try{
+    const d = await (await fetch(url)).json();
+    if (!d.ok) throw new Error(d.error || '응답이 이상합니다');
+    toast(d.url ? '연결됐습니다. 문서가 준비되어 있습니다' : '연결됐습니다');
+  }catch(e){ toast('연결 실패: 배포 시 "액세스 권한: 모든 사용자"인지 확인하세요'); }
 }
 
 /* 정리 끝난 녹음 원본만 일괄 삭제 — 받아쓴 글과 정리 결과는 그대로 */
@@ -718,6 +775,15 @@ function openSettings(){
     <label class="field">AI에게 줄 추가 지시
       <textarea id="cfgGuide">${esc(cfg.guide)}</textarea></label>
     <button class="link-btn" data-act="resetguide">기본 지시로 되돌리기</button>
+    <h3>구글 독스</h3>
+    <label class="field">Apps Script 웹앱 URL
+      <input id="cfgGdoc" autocomplete="off" value="${esc(cfg.gdocUrl || '')}" placeholder="https://script.google.com/macros/s/…/exec"></label>
+    <p class="hint">구글 계정에 스크립트를 한 번 배포하고 그 URL을 붙여넣습니다. 정리된 메모가 한 문서에 차례로 쌓입니다.</p>
+    <div class="row">
+      <button class="link-btn" data-act="gdoctest">연결 확인</button>
+      <button class="link-btn" data-act="gdocall">안 보낸 메모 모두 보내기</button>
+    </div>
+    <label class="check"><input type="checkbox" id="cfgGdocAuto" ${cfg.gdocAuto === false ? '' : 'checked'}> 정리가 끝나면 자동으로 보내기</label>
     <div class="actions">
       <button class="btn primary" data-act="savecfg">저장</button>
       <button class="btn" data-act="export">백업 내보내기</button>
@@ -768,6 +834,7 @@ async function loadModels(){
     if (!list.length) throw new Error('쓸 수 있는 모델이 없습니다');
     // 지금 입력 중인 값을 잃지 않게 먼저 담아 두고 설정 화면을 다시 그린다
     cfg.key = key; cfg.model = currentModelInput(); cfg.guide = $('#cfgGuide').value.trim(); cfg.fallback = $('#cfgFallback').checked;
+    cfg.gdocUrl = $('#cfgGdoc').value.trim(); cfg.gdocAuto = $('#cfgGdocAuto').checked;
     cfg.models = list; cfg.modelsAt = Date.now();
     store.set('nuema_cfg_v1', cfg);
     openSettings(); toast(`모델 ${list.length}개를 불러왔습니다`);
@@ -778,6 +845,8 @@ function saveSettings(){
   cfg.model = currentModelInput();
   cfg.guide = $('#cfgGuide').value.trim();
   cfg.fallback = $('#cfgFallback').checked;
+  cfg.gdocUrl = $('#cfgGdoc').value.trim();
+  cfg.gdocAuto = $('#cfgGdocAuto').checked;
   store.set('nuema_cfg_v1', cfg);
   closeSheet(); toast('저장했습니다');
 }
