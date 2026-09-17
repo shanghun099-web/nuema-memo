@@ -126,6 +126,20 @@ label.field input:focus,label.field textarea:focus,.sheet textarea:focus{outline
 textarea{resize:vertical;min-height:140px}
 .hint{font-size:.78rem;color:var(--ink-3);margin:8px 0 0;line-height:1.65}
 label.field + .link-btn{margin-top:12px;padding-left:0}
+.sheet select{display:block;width:100%;margin-top:8px;background:none;border:none;border-bottom:1px solid var(--line-2);border-radius:0;
+  padding:8px 24px 8px 0;color:var(--ink);font:inherit;font-size:.98rem;letter-spacing:0;appearance:none;-webkit-appearance:none;
+  background-image:linear-gradient(45deg,transparent 50%,var(--ink-2) 50%),linear-gradient(135deg,var(--ink-2) 50%,transparent 50%);
+  background-position:calc(100% - 10px) 55%,calc(100% - 5px) 55%;background-size:5px 5px;background-repeat:no-repeat}
+.sheet select:focus{outline:none;border-bottom-color:var(--ink)}
+.custom-model{display:block;width:100%;margin-top:10px;background:none;border:none;border-bottom:1px solid var(--line-2);border-radius:0;padding:8px 0;color:var(--ink);font:inherit;font-size:.95rem}
+.custom-model:focus{outline:none;border-bottom-color:var(--ink)}
+.custom-model[hidden]{display:none}
+.row{display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;margin-top:6px}
+.row .link-btn{padding-left:0}
+.row .hint{margin:0}
+label.check{display:flex;align-items:flex-start;gap:10px;margin-top:18px;font-size:.85rem;color:var(--ink-2);line-height:1.6;letter-spacing:0}
+label.check input{margin:5px 0 0;accent-color:var(--ink);flex:none}
+.model-tag{margin-left:auto;font-size:.68rem;color:var(--ink-3);letter-spacing:.02em}
 .toast{position:fixed;left:50%;bottom:calc(28px + env(safe-area-inset-bottom));transform:translateX(-50%);
   background:var(--ink);color:var(--paper);padding:10px 18px;border-radius:2px;font-size:.86rem;z-index:40;letter-spacing:.03em;
   opacity:0;pointer-events:none;transition:opacity .25s;max-width:90vw}
@@ -197,7 +211,23 @@ const store = {
   set(k, v){ try{ localStorage.setItem(k, JSON.stringify(v)); }catch(e){ toast('저장 공간이 부족합니다. 백업 후 오래된 메모를 지워주세요'); } }
 };
 let memos = store.get('nuema_memos_v1', []);
-let cfg = Object.assign({key:'', model:'gemini-2.5-flash', guide:DEFAULT_GUIDE}, store.get('nuema_cfg_v1', {}));
+/* 기본 제공 모델. "불러오기"를 누르면 내 키로 실제 쓸 수 있는 목록으로 보강된다 */
+const MODELS = [
+  {id:'gemini-2.5-flash',        name:'Gemini 2.5 Flash',          note:'기본값. 빠르고 무료 한도가 넉넉함'},
+  {id:'gemini-2.5-pro',          name:'Gemini 2.5 Pro',            note:'더 꼼꼼하게 읽음. 느리고 무료 한도가 적음'},
+  {id:'gemini-2.5-flash-lite',   name:'Gemini 2.5 Flash-Lite',     note:'가장 가볍고 빠름. 짧은 메모에 적당'},
+  {id:'gemini-3-flash-preview',  name:'Gemini 3 Flash (프리뷰)',    note:'새 세대. 프리뷰라 이름이 바뀔 수 있음'},
+  {id:'gemini-3-pro-preview',    name:'Gemini 3 Pro (프리뷰)',      note:'새 세대 상위 모델'},
+  {id:'gemini-2.0-flash',        name:'Gemini 2.0 Flash',          note:'이전 세대. 예비용'}
+];
+// 고른 모델이 없거나(404) 한도 초과(429)·과부하(503)면 이 순서로 넘어간다
+const FALLBACK = ['gemini-2.5-flash', 'gemini-2.5-flash-lite', 'gemini-2.0-flash'];
+let cfg = Object.assign({key:'', model:'gemini-2.5-flash', guide:DEFAULT_GUIDE, fallback:true, models:[]}, store.get('nuema_cfg_v1', {}));
+function allModels(){
+  const seen = new Set(), out = [];
+  [...MODELS, ...arr(cfg.models)].forEach(x => { if (x && x.id && !seen.has(x.id)){ seen.add(x.id); out.push(x); } });
+  return out;
+}
 let filter = '전체';
 let openId = null;
 const saveMemos = () => store.set('nuema_memos_v1', memos);
@@ -414,23 +444,29 @@ async function processMemo(id){
     } else {
       parts = [{text: buildPrompt(m.text)}];
     }
-    // 키는 URL이 아니라 헤더로 보낸다 (히스토리·프록시 로그에 남지 않게)
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(cfg.model)}:generateContent`;
-    const res = await fetch(url, {
-      method:'POST', headers:{'Content-Type':'application/json', 'x-goog-api-key': cfg.key},
-      body: JSON.stringify({contents:[{role:'user', parts}], generationConfig:{responseMimeType:'application/json', temperature:0.6}})
-    });
-    if (!res.ok){
+    const body = JSON.stringify({contents:[{role:'user', parts}], generationConfig:{responseMimeType:'application/json', temperature:0.6}});
+    // 고른 모델 → (켜져 있으면) 예비 모델 순으로 시도. 키 오류(400/403) 같은 건 바로 멈춘다
+    const chain = [cfg.model, ...(cfg.fallback === false ? [] : FALLBACK.filter(x => x !== cfg.model).slice(0, 2))];
+    let d = null, used = null, lastErr = null;
+    for (const model of chain){
+      // 키는 URL이 아니라 헤더로 보낸다 (히스토리·프록시 로그에 남지 않게)
+      const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`, {
+        method:'POST', headers:{'Content-Type':'application/json', 'x-goog-api-key': cfg.key}, body
+      });
+      if (res.ok){ d = await res.json(); used = model; break; }
       const t = await res.text();
       let msg = t; try{ msg = JSON.parse(t).error.message; }catch(e){}
-      throw new Error(`Gemini 오류 ${res.status}: ${String(msg).slice(0, 140)}`);
+      lastErr = new Error(`Gemini 오류 ${res.status} (${model}): ${String(msg).slice(0, 140)}`);
+      if (![404, 429, 500, 503].includes(res.status)) throw lastErr;
     }
-    const d = await res.json();
+    if (!d) throw lastErr;
     const txt = ((d.candidates && d.candidates[0] && d.candidates[0].content && d.candidates[0].content.parts) || []).map(p => p.text || '').join('');
     if (!txt) throw new Error('AI가 빈 응답을 보냈습니다. 다시 정리해 보세요');
     m.r = parseJSON(txt);
     if (!CATS.some(c => c.k === m.r.category)) m.r.category = '기타';
+    m.model = used;
     m.status = 'done';
+    if (used !== cfg.model) toast(`${cfg.model}가 응답하지 않아 ${used}로 정리했습니다`);
   }catch(e){
     const msg = e.message || String(e);
     if (prev){ m.r = prev; m.status = 'done'; m.err = ''; toast('다시 정리하지 못했습니다. 이전 결과를 유지합니다 — ' + msg); }
@@ -545,7 +581,7 @@ async function openDetail(id){
   if (m.status === 'done'){
     const c = r.check || {};
     body = `
-      <div class="meta"><span class="cat-dot" id="detailDot" style="background:${catColor(r.category)}"></span><span id="detailCat">${esc(r.category)}</span> ${fmtDate(m.created)}</div>
+      <div class="meta"><span class="cat-dot" id="detailDot" style="background:${catColor(r.category)}"></span><span id="detailCat">${esc(r.category)}</span> ${fmtDate(m.created)}${m.model ? ` <span class="model-tag">${esc(m.model)}</span>` : ''}</div>
       <div class="title-row"><h2 id="detailTitle">${esc(r.title)}</h2><button class="link-btn" data-act="edittitle">제목 고치기</button></div>
       <div class="cat-edit" aria-label="분류 바꾸기">${CATS.map(c =>
         `<button class="chip" data-cat="${c.k}" aria-pressed="${c.k === r.category}">${c.k}</button>`).join('')}</div>
@@ -610,6 +646,7 @@ $('#sheetBody').onclick = e => {
   if (act === 'export') return exportJSON();
   if (act === 'import') return $('#importFile').click();
   if (act === 'purgeaudio') return purgeAudio();
+  if (act === 'loadmodels') return loadModels();
   if (act === 'savetext') return saveTextMemo();
   if (act === 'resetguide'){ $('#cfgGuide').value = DEFAULT_GUIDE; }
 };
@@ -669,9 +706,15 @@ function openSettings(){
     <label class="field">Gemini API 키
       <input id="cfgKey" type="password" autocomplete="off" value="${esc(cfg.key)}" placeholder="AIza…"></label>
     <p class="hint">이 기기 브라우저에만 저장됩니다. 코드에 넣지 마세요.</p>
-    <label class="field">모델 이름
-      <input id="cfgModel" value="${esc(cfg.model)}"></label>
-    <p class="hint">새 모델이 나오면 이름만 바꾸면 됩니다.</p>
+    <label class="field">정리에 쓸 모델
+      <select id="cfgModel">${modelOptions()}</select></label>
+    <input id="cfgModelCustom" class="custom-model" placeholder="모델 ID를 그대로 입력 (예: gemini-2.5-flash)" value="${esc(cfg.model)}" hidden>
+    <p class="hint" id="modelNote"></p>
+    <div class="row">
+      <button class="link-btn" data-act="loadmodels">내 키로 쓸 수 있는 모델 불러오기</button>
+      ${cfg.modelsAt ? `<span class="hint">${fmtDate(cfg.modelsAt)} 기준 ${arr(cfg.models).length}개</span>` : ''}
+    </div>
+    <label class="check"><input type="checkbox" id="cfgFallback" ${cfg.fallback === false ? '' : 'checked'}> 고른 모델이 응답하지 않으면 다른 모델로 자동 재시도</label>
     <label class="field">AI에게 줄 추가 지시
       <textarea id="cfgGuide">${esc(cfg.guide)}</textarea></label>
     <button class="link-btn" data-act="resetguide">기본 지시로 되돌리기</button>
@@ -685,11 +728,56 @@ function openSettings(){
     <h3>저장 공간</h3>
     <button class="btn" data-act="purgeaudio">정리 끝난 녹음 원본 지우기</button>
     <p class="hint">받아쓴 글과 정리 결과는 남기고 음성 파일만 지웁니다. 지운 메모는 다시 정리할 수 없습니다.</p>`);
+  syncModelUI();
+  $('#cfgModel').onchange = syncModelUI;
+}
+function modelOptions(){
+  const list = allModels();
+  if (!list.some(x => x.id === cfg.model)) list.unshift({id: cfg.model, name: cfg.model, note: '직접 입력한 모델'});
+  return list.map(x => `<option value="${esc(x.id)}" ${x.id === cfg.model ? 'selected' : ''}>${esc(x.name || x.id)}</option>`).join('')
+    + `<option value="__custom">직접 입력…</option>`;
+}
+// 선택에 따라 설명 문구를 바꾸고, "직접 입력"이면 입력칸을 연다
+function syncModelUI(){
+  const sel = $('#cfgModel'), custom = $('#cfgModelCustom'), note = $('#modelNote');
+  if (!sel) return;
+  if (sel.value === '__custom'){ custom.hidden = false; custom.focus(); note.textContent = 'Google AI Studio에 있는 모델 ID를 그대로 적습니다. models/ 접두어는 뺍니다.'; return; }
+  custom.hidden = true;
+  const x = allModels().find(x => x.id === sel.value);
+  note.textContent = x ? `${x.id} — ${x.note || ''}` : sel.value;
+}
+function currentModelInput(){
+  const sel = $('#cfgModel');
+  const v = sel.value === '__custom' ? $('#cfgModelCustom').value.trim().replace(/^models\//, '') : sel.value;
+  return v || 'gemini-2.5-flash';
+}
+/* 키로 실제 쓸 수 있는 모델 목록을 받아온다. generateContent 되는 gemini 계열만 */
+async function loadModels(){
+  const key = $('#cfgKey').value.trim();
+  if (!key){ toast('먼저 API 키를 입력하세요'); return; }
+  toast('모델 목록을 불러오는 중…');
+  try{
+    const res = await fetch('https://generativelanguage.googleapis.com/v1beta/models?pageSize=200', {headers:{'x-goog-api-key': key}});
+    if (!res.ok){ let msg = ''; try{ msg = (await res.json()).error.message; }catch(e){} throw new Error(`${res.status} ${String(msg).slice(0, 100)}`); }
+    const d = await res.json();
+    const skip = /embedding|tts|image|live|native-audio|robotics|computer-use|aqa/i;
+    const list = arr(d.models)
+      .filter(x => /^models\/gemini/.test(x.name) && arr(x.supportedGenerationMethods).includes('generateContent') && !skip.test(x.name))
+      .map(x => ({id: x.name.replace(/^models\//, ''), name: x.displayName || x.name, note: String(x.description || '').slice(0, 90)}))
+      .sort((a, b) => b.id.localeCompare(a.id));   // 최신 버전이 위로
+    if (!list.length) throw new Error('쓸 수 있는 모델이 없습니다');
+    // 지금 입력 중인 값을 잃지 않게 먼저 담아 두고 설정 화면을 다시 그린다
+    cfg.key = key; cfg.model = currentModelInput(); cfg.guide = $('#cfgGuide').value.trim(); cfg.fallback = $('#cfgFallback').checked;
+    cfg.models = list; cfg.modelsAt = Date.now();
+    store.set('nuema_cfg_v1', cfg);
+    openSettings(); toast(`모델 ${list.length}개를 불러왔습니다`);
+  }catch(e){ toast('모델 목록을 못 불러왔습니다: ' + (e.message || e)); }
 }
 function saveSettings(){
   cfg.key = $('#cfgKey').value.trim();
-  cfg.model = $('#cfgModel').value.trim() || 'gemini-2.5-flash';
+  cfg.model = currentModelInput();
   cfg.guide = $('#cfgGuide').value.trim();
+  cfg.fallback = $('#cfgFallback').checked;
   store.set('nuema_cfg_v1', cfg);
   closeSheet(); toast('저장했습니다');
 }
