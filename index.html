@@ -1,0 +1,805 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#F7F4EC">
+<title>누에마 메모</title>
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="누에마 메모">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Gowun+Batang:wght@400;700&family=IBM+Plex+Sans+KR:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+/* ---- 종이와 먹: 하라 켄야 풍 ----
+   바탕은 흰 종이, 글자는 먹. 색은 주홍(녹음)과 옅은 남색(AI 의견) 둘뿐.
+   면을 채우지 않고 가는 선으로 나누며, 그림자는 쓰지 않는다. */
+:root{
+  --paper:#F7F4EC; --paper-2:#FCFAF5; --paper-3:#EFEBE1; --line:#DAD5C8; --line-2:#C9C3B4;
+  --ink:#2A2924; --ink-2:#6E6A61; --ink-3:#A39E92;
+  --shu:#C3502F; --ai:#5E6688; --moss:#7B8A6C;
+  --serif:"Gowun Batang","Nanum Myeongjo","Apple Myungjo",serif;
+  --sans:"IBM Plex Sans KR","Apple SD Gothic Neo","Malgun Gothic",sans-serif;
+  /* 이전 이름과의 호환 */
+  --bg:var(--paper); --surface:var(--paper-2); --raise:var(--paper-3); --silk:var(--ink); --dim:var(--ink-2); --leaf:var(--moss); --rec:var(--shu);
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--sans);font-size:16px;line-height:1.7;
+  -webkit-font-smoothing:antialiased;letter-spacing:-.005em}
+body{padding-bottom:env(safe-area-inset-bottom)}
+button{font:inherit;color:inherit;cursor:pointer;-webkit-tap-highlight-color:transparent}
+button:focus-visible,input:focus-visible,textarea:focus-visible{outline:1px solid var(--ink);outline-offset:3px}
+::selection{background:var(--paper-3)}
+.wrap{max-width:520px;margin:0 auto;padding:0 24px}
+
+header{display:flex;align-items:baseline;justify-content:space-between;padding:28px 0 0}
+header h1{font-family:var(--serif);font-weight:400;font-size:1.05rem;margin:0;letter-spacing:.14em;color:var(--ink)}
+.icon-btn{background:none;border:none;padding:4px 0;font-size:.82rem;color:var(--ink-2);letter-spacing:.06em}
+
+/* 녹음 영역 — 종이 위의 원 하나 */
+.rec-zone{display:flex;flex-direction:column;align-items:center;padding:44px 0 36px}
+.rec-wrap{position:relative;width:184px;height:184px}
+.rec-wrap svg{position:absolute;inset:0;transform:rotate(-90deg)}
+.ring-bg{fill:none;stroke:var(--line-2);stroke-width:1}
+.ring{fill:none;stroke:var(--shu);stroke-width:1.5;stroke-linecap:butt;transition:stroke-dashoffset .25s linear}
+.thread{fill:none;stroke:var(--ink-3);stroke-width:1;stroke-dasharray:1 10;opacity:0;transform-origin:50% 50%}
+.recording .thread{opacity:.7;animation:spin 8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.rec-btn{position:absolute;inset:16px;border-radius:50%;border:none;background:none;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;
+  font-family:var(--serif);font-size:.95rem;font-weight:400;letter-spacing:.1em;color:var(--ink);transition:background .2s}
+.rec-btn:active{background:var(--paper-3)}
+.rec-btn .dot{width:14px;height:14px;border-radius:50%;background:var(--shu);transition:border-radius .2s,transform .2s}
+.recording .rec-btn .dot{border-radius:2px;transform:scale(.9)}
+.timer{margin-top:22px;font-variant-numeric:tabular-nums;color:var(--ink-2);font-size:.88rem;min-height:1.5em;letter-spacing:.02em;text-align:center}
+.sub-actions{margin-top:4px}
+.link-btn{background:none;border:none;color:var(--ink-2);text-decoration:underline;text-decoration-color:var(--line-2);text-underline-offset:5px;font-size:.85rem;padding:6px;letter-spacing:.04em}
+.link-btn:hover{text-decoration-color:var(--ink)}
+
+/* 필터 — 글자만, 고른 것은 위에 먹선 */
+.filters{display:flex;gap:2px;overflow-x:auto;padding:0 0 2px;scrollbar-width:none;border-top:1px solid var(--line);margin-top:4px}
+.filters::-webkit-scrollbar{display:none}
+.chip{flex:none;border:none;background:none;border-radius:0;padding:12px 10px 10px;font-size:.85rem;color:var(--ink-3);letter-spacing:.04em;position:relative}
+.chip:first-child{padding-left:0}
+.chip[aria-pressed="true"]{color:var(--ink)}
+.filters .chip[aria-pressed="true"]::after{content:"";position:absolute;left:10px;right:10px;top:-1px;height:1px;background:var(--ink)}
+.filters .chip:first-child[aria-pressed="true"]::after{left:0}
+.toolbar{display:flex;gap:16px;align-items:center;margin:4px 0 4px;border-bottom:1px solid var(--line)}
+.toolbar input{flex:1;min-width:0;background:none;border:none;padding:10px 0;color:var(--ink);font:inherit;font-size:.9rem}
+.toolbar input::placeholder{color:var(--ink-3)}
+.toolbar input::-webkit-search-cancel-button{-webkit-appearance:none}
+.toolbar .btn{border:none;background:none;padding:6px 0;font-size:.82rem;color:var(--ink-2);letter-spacing:.04em;border-radius:0}
+
+/* 목록 — 가는 선으로만 나눈다 */
+.list{list-style:none;margin:0;padding:0 0 60px}
+.item{border-bottom:1px solid var(--line)}
+.item button{display:block;width:100%;text-align:left;background:none;border:none;padding:20px 0 18px}
+.item button:active{background:var(--paper-3)}
+.meta{display:flex;align-items:center;gap:8px;font-size:.74rem;color:var(--ink-3);letter-spacing:.06em;font-variant-numeric:tabular-nums}
+.cat-dot{width:6px;height:6px;border-radius:50%;flex:none}
+.item-title{font-family:var(--serif);font-size:1.12rem;font-weight:400;margin:6px 0 4px;line-height:1.5;color:var(--ink)}
+.item-sub{font-size:.86rem;color:var(--ink-2);line-height:1.65;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.state-err{color:var(--shu)}
+.empty{padding:64px 8px;text-align:center;color:var(--ink-3);font-family:var(--serif);font-size:.95rem;letter-spacing:.04em}
+
+/* 시트 — 종이 한 장이 올라온다 */
+.sheet-bg{position:fixed;inset:0;background:rgba(42,41,36,.28);display:none;z-index:20}
+.sheet-bg.open{display:block}
+.sheet{position:fixed;left:0;right:0;bottom:0;max-height:92vh;overflow-y:auto;background:var(--paper-2);
+  border-radius:4px 4px 0 0;border-top:1px solid var(--line-2);padding:10px 28px calc(32px + env(safe-area-inset-bottom));z-index:21;
+  transform:translateY(100%);transition:transform .3s cubic-bezier(.2,.7,.2,1);max-width:600px;margin:0 auto}
+.sheet.open{transform:none}
+.grip{width:28px;height:1px;background:var(--line-2);margin:8px auto 22px}
+.sheet h2{font-family:var(--serif);font-size:1.5rem;font-weight:400;margin:6px 0 6px;line-height:1.4;letter-spacing:-.01em}
+.sheet h3{font-family:var(--sans);font-size:.74rem;font-weight:500;color:var(--ink-3);margin:34px 0 10px;letter-spacing:.14em}
+.sheet h3::after{content:"";display:block;width:16px;height:1px;background:var(--line-2);margin-top:8px}
+.transcript{font-family:var(--serif);font-size:1.02rem;line-height:2;white-space:pre-wrap;margin:0;color:var(--ink)}
+.sheet ul{margin:0;padding-left:0;list-style:none}
+.sheet li{margin:6px 0;padding-left:16px;position:relative;line-height:1.7}
+.sheet li::before{content:"";position:absolute;left:0;top:.8em;width:6px;height:1px;background:var(--ink-3)}
+.ai-block{border-left:1px solid var(--ai);padding:4px 0 6px 18px;margin-top:30px}
+.ai-block h4{margin:16px 0 4px;font-size:.78rem;color:var(--ai);font-weight:500;letter-spacing:.1em}
+.ai-block h4:first-of-type{margin-top:6px}
+.ai-block li::before{background:var(--ai);opacity:.6}
+.ai-note{font-size:.74rem;color:var(--ai);margin:0 0 4px;letter-spacing:.08em}
+.draft{font-family:var(--serif);white-space:pre-wrap;line-height:2.1;background:none;border-top:1px solid var(--line);border-bottom:1px solid var(--line);border-radius:0;padding:16px 2px;margin:8px 0 0;font-size:1rem}
+.tags{display:flex;flex-wrap:wrap;gap:4px 14px;margin-top:10px}
+.tag{font-size:.78rem;color:var(--ink-3);border:none;padding:0;letter-spacing:.04em}
+.tag::before{content:"#";opacity:.6}
+audio{width:100%;margin-top:18px;height:36px;filter:grayscale(1) contrast(.9);opacity:.85}
+.actions{display:flex;flex-wrap:wrap;gap:8px 20px;margin-top:40px;padding-top:18px;border-top:1px solid var(--line)}
+.btn{border:none;background:none;border-radius:0;padding:8px 0;font-size:.88rem;color:var(--ink-2);letter-spacing:.06em;text-decoration:underline;text-decoration-color:transparent;text-underline-offset:5px;transition:color .15s,text-decoration-color .15s}
+.btn:hover{color:var(--ink);text-decoration-color:var(--line-2)}
+.btn.primary{color:var(--ink);font-weight:500}
+.btn.primary::before{content:"→";margin-right:8px;font-weight:400}
+.btn.danger{color:var(--shu);margin-left:auto;order:1}   /* 삭제는 항상 맨 오른쪽 끝에 */
+label.field{display:block;margin-top:24px;font-size:.78rem;color:var(--ink-3);letter-spacing:.1em}
+label.field input,label.field textarea,.sheet textarea{display:block;width:100%;margin-top:8px;background:none;border:none;border-bottom:1px solid var(--line-2);
+  border-radius:0;padding:8px 0;color:var(--ink);font:inherit;font-size:.98rem;letter-spacing:0;line-height:1.7}
+label.field input:focus,label.field textarea:focus,.sheet textarea:focus{outline:none;border-bottom-color:var(--ink)}
+.sheet textarea{font-family:var(--serif);font-size:1.05rem;line-height:2}
+textarea{resize:vertical;min-height:140px}
+.hint{font-size:.78rem;color:var(--ink-3);margin:8px 0 0;line-height:1.65}
+label.field + .link-btn{margin-top:12px;padding-left:0}
+.toast{position:fixed;left:50%;bottom:calc(28px + env(safe-area-inset-bottom));transform:translateX(-50%);
+  background:var(--ink);color:var(--paper);padding:10px 18px;border-radius:2px;font-size:.86rem;z-index:40;letter-spacing:.03em;
+  opacity:0;pointer-events:none;transition:opacity .25s;max-width:90vw}
+.toast.show{opacity:1}
+.toast.act{pointer-events:auto;display:flex;align-items:center;gap:16px}
+.toast-btn{background:none;border:none;padding:0;font-weight:500;text-decoration:underline;text-underline-offset:4px;color:inherit}
+.sheet:focus{outline:none}
+.cat-edit{display:flex;flex-wrap:wrap;gap:2px 16px;margin:6px 0 0}
+.cat-edit .chip{padding:6px 0;font-size:.82rem}
+.cat-edit .chip[aria-pressed="true"]{text-decoration:underline;text-underline-offset:5px;text-decoration-color:var(--ink)}
+.title-row{display:flex;align-items:baseline;gap:12px}
+.title-row h2{flex:1}
+.title-row .link-btn{flex:none;padding:4px 0;font-size:.78rem}
+.title-edit{width:100%;font-family:var(--serif);font-size:1.5rem;background:none;border:none;border-bottom:1px solid var(--ink);border-radius:0;padding:6px 0;color:var(--ink);margin:6px 0}
+.title-edit:focus{outline:none}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>누에마 메모</h1>
+    <button class="icon-btn" id="btnSettings">설정</button>
+  </header>
+
+  <section class="rec-zone" id="recZone">
+    <div class="rec-wrap">
+      <svg viewBox="0 0 176 176" aria-hidden="true">
+        <circle class="ring-bg" cx="88" cy="88" r="84"/>
+        <circle class="ring" id="ring" cx="88" cy="88" r="84"/>
+        <circle class="thread" cx="88" cy="88" r="78"/>
+      </svg>
+      <button class="rec-btn" id="recBtn" aria-label="녹음 시작">
+        <span class="dot"></span><span id="recLabel">녹음</span>
+      </button>
+    </div>
+    <div class="timer" id="timer">떠오른 걸 바로 말해 두세요 (최대 5분)</div>
+    <div class="sub-actions"><button class="link-btn" id="btnText">글로 적기</button></div>
+  </section>
+
+  <div class="filters" id="filters"></div>
+  <div class="toolbar">
+    <input id="search" type="search" placeholder="메모 검색">
+    <button class="btn" id="btnDeck">모아서 PPT</button>
+  </div>
+  <ul class="list" id="list"></ul>
+</div>
+
+<div class="sheet-bg" id="sheetBg"></div>
+<div class="sheet" id="sheet" role="dialog" aria-modal="true" tabindex="-1"><div class="grip"></div><div id="sheetBody"></div></div>
+<div class="toast" id="toast"></div>
+<input type="file" id="importFile" accept="application/json" hidden>
+
+<script>
+/* ---------- 기본값 ---------- */
+const MAX_SEC = 300;
+const CATS = [
+  {k:'글감', c:'#7B8A6C'}, {k:'쇼츠', c:'#B99A4E'}, {k:'앱', c:'#6C8A9B'},
+  {k:'업무', c:'#B0825C'}, {k:'기타', c:'#A39E92'}
+];
+const catColor = k => (CATS.find(c => c.k === k) || CATS[4]).c;
+const DEFAULT_GUIDE =
+`- 글감 체크: 사물은 사물로 두고, 교훈이나 감정을 직접 말하는 방향은 피하게 도와줘.
+- 칭찬은 근거가 있는 만큼만. 과장하지 말고 약한 부분을 분명히 짚어줘.
+- 쇼츠 아이디어면 첫 3초에 보여줄 장면을 함께 제안해줘.`;
+
+const store = {
+  get(k, d){ try{ const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; }catch(e){ return d; } },
+  set(k, v){ try{ localStorage.setItem(k, JSON.stringify(v)); }catch(e){ toast('저장 공간이 부족합니다. 백업 후 오래된 메모를 지워주세요'); } }
+};
+let memos = store.get('nuema_memos_v1', []);
+let cfg = Object.assign({key:'', model:'gemini-2.5-flash', guide:DEFAULT_GUIDE}, store.get('nuema_cfg_v1', {}));
+let filter = '전체';
+let openId = null;
+const saveMemos = () => store.set('nuema_memos_v1', memos);
+
+/* ---------- IndexedDB (녹음 원본 보관) ---------- */
+const idb = {
+  db: null,
+  open(){
+    if (this.db) return Promise.resolve(this.db);
+    return new Promise((ok, no) => {
+      const r = indexedDB.open('nuema_audio', 1);
+      r.onupgradeneeded = () => r.result.createObjectStore('a');
+      r.onsuccess = () => { this.db = r.result; ok(this.db); };
+      r.onerror = () => no(r.error);
+    });
+  },
+  async tx(mode, fn){
+    const db = await this.open();
+    return new Promise((ok, no) => {
+      const t = db.transaction('a', mode); const s = t.objectStore('a');
+      const req = fn(s);
+      t.oncomplete = () => ok(req && req.result);
+      t.onerror = () => no(t.error);
+    });
+  },
+  put(id, blob){ return this.tx('readwrite', s => s.put(blob, id)); },
+  get(id){ return this.tx('readonly', s => s.get(id)); },
+  del(id){ return this.tx('readwrite', s => s.delete(id)); }
+};
+
+/* ---------- 유틸 ---------- */
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const arr = v => Array.isArray(v) ? v.filter(Boolean) : [];
+/* toast(msg) 또는 toast(msg, {label, fn, ms}) — 버튼이 있으면 더 오래 떠 있음 */
+function toast(msg, action){
+  const t = $('#toast');
+  t.classList.toggle('act', !!action);
+  if (action){
+    t.innerHTML = `<span>${esc(msg)}</span><button class="toast-btn" type="button">${esc(action.label)}</button>`;
+    t.querySelector('button').onclick = () => { t.classList.remove('show'); action.fn(); };
+  } else t.textContent = msg;
+  t.classList.add('show'); clearTimeout(toast._t);
+  toast._t = setTimeout(() => t.classList.remove('show'), action ? (action.ms || 6000) : 2400);
+}
+// 앱이 닫혀 '정리 중'으로 멈춘 메모는 다시 시도할 수 있게 표시 (시작 시·백업 가져오기 시 공통)
+function normalizeMemo(m){
+  if (m.status === 'working' || m.status === 'pending'){ m.status = 'error'; m.err = '정리가 중단됐습니다. 다시 정리해 주세요'; }
+  return m;
+}
+async function copyText(text){
+  try{ if (navigator.clipboard && navigator.clipboard.writeText){ await navigator.clipboard.writeText(text); return true; } }catch(e){}
+  // file:// 나 http 처럼 clipboard API가 없는 환경용 대체 경로
+  try{
+    const ta = document.createElement('textarea');
+    ta.value = text; ta.setAttribute('readonly', ''); ta.style.cssText = 'position:fixed;top:0;left:0;opacity:0';
+    document.body.appendChild(ta); ta.select(); ta.setSelectionRange(0, text.length);
+    const ok = document.execCommand('copy'); ta.remove(); return ok;
+  }catch(e){ return false; }
+}
+function fmtDate(ts){
+  const d = new Date(ts), p = n => String(n).padStart(2, '0');
+  return `${d.getMonth()+1}/${d.getDate()} ${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+async function toB64(blob){
+  const bytes = new Uint8Array(await blob.arrayBuffer());
+  let bin = '';
+  for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+  return btoa(bin);
+}
+
+/* 16kHz 모노 WAV로 변환 (Gemini 호환성 + 용량 절감) */
+async function toWav16k(blob){
+  const AC = window.AudioContext || window.webkitAudioContext;
+  const ac = new AC();
+  const decoded = await ac.decodeAudioData(await blob.arrayBuffer());
+  ac.close();
+  const rate = 16000;
+  const off = new OfflineAudioContext(1, Math.max(1, Math.ceil(decoded.duration * rate)), rate);
+  const src = off.createBufferSource(); src.buffer = decoded; src.connect(off.destination); src.start();
+  const data = (await off.startRendering()).getChannelData(0);
+  const buf = new ArrayBuffer(44 + data.length * 2), v = new DataView(buf);
+  const w = (o, s) => { for (let i = 0; i < s.length; i++) v.setUint8(o + i, s.charCodeAt(i)); };
+  w(0,'RIFF'); v.setUint32(4, 36 + data.length * 2, true); w(8,'WAVE'); w(12,'fmt ');
+  v.setUint32(16,16,true); v.setUint16(20,1,true); v.setUint16(22,1,true);
+  v.setUint32(24,rate,true); v.setUint32(28,rate*2,true); v.setUint16(32,2,true); v.setUint16(34,16,true);
+  w(36,'data'); v.setUint32(40, data.length * 2, true);
+  for (let i = 0; i < data.length; i++){ const s = Math.max(-1, Math.min(1, data[i])); v.setInt16(44 + i*2, s < 0 ? s * 0x8000 : s * 0x7FFF, true); }
+  return new Blob([buf], {type:'audio/wav'});
+}
+
+/* ---------- 녹음 ---------- */
+let rec = null, chunks = [], startAt = 0, tick = null, stream = null, wakeLock = null;
+const IDLE_MSG = '떠오른 걸 바로 말해 두세요 (최대 5분)';
+const isRecording = () => !!(rec && rec.state === 'recording');
+const ring = $('#ring'), CIRC = 2 * Math.PI * 84;
+ring.style.strokeDasharray = CIRC; ring.style.strokeDashoffset = CIRC;
+
+$('#recBtn').onclick = () => isRecording() ? stopRec() : startRec();
+
+/* 녹음 중 화면이 꺼지면 일부 폰은 마이크를 끊으므로 화면을 켜 둔다 */
+async function holdWake(){
+  if (!('wakeLock' in navigator)) return;
+  try{ wakeLock = await navigator.wakeLock.request('screen'); }catch(e){ wakeLock = null; }
+}
+function releaseWake(){ if (wakeLock){ wakeLock.release().catch(() => {}); wakeLock = null; } }
+// 다른 앱에 갔다 돌아오면 wake lock이 풀려 있으므로 녹음 중이면 다시 잡는다
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && isRecording()) holdWake(); });
+
+async function startRec(){
+  if (!navigator.mediaDevices || !window.MediaRecorder){ toast('이 브라우저는 녹음을 지원하지 않습니다'); return; }
+  try{
+    stream = await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true, noiseSuppression:true}});
+  }catch(e){ toast('마이크 권한을 허용해야 녹음할 수 있습니다'); return; }
+  chunks = [];
+  rec = new MediaRecorder(stream);
+  rec.ondataavailable = e => e.data.size && chunks.push(e.data);
+  rec.onstop = onRecStop;
+  rec.onerror = () => { if (isRecording()){ stopRec(); toast('녹음 중 오류가 나서 멈췄습니다. 지금까지 녹음은 저장합니다'); } };
+  // 전화 수신·앱 전환 등으로 마이크가 끊기면 조용히 실패하지 않고 바로 멈추고 알린다
+  stream.getTracks().forEach(t => t.onended = () => { if (isRecording()){ stopRec(); toast('마이크 연결이 끊겨 녹음을 멈췄습니다'); } });
+  rec.start(1000);
+  startAt = Date.now();
+  $('#recZone').classList.add('recording');
+  $('#recLabel').textContent = '멈추기';
+  $('#recBtn').setAttribute('aria-label', '녹음 멈추기');
+  tick = setInterval(updateTimer, 250); updateTimer();
+  holdWake();
+}
+function updateTimer(){
+  const s = (Date.now() - startAt) / 1000;
+  ring.style.strokeDashoffset = CIRC * (1 - Math.min(s / MAX_SEC, 1));
+  const m = Math.floor(s / 60), ss = String(Math.floor(s % 60)).padStart(2, '0');
+  $('#timer').textContent = `녹음 중 ${m}:${ss} / 5:00`;
+  if (s >= MAX_SEC) stopRec();
+}
+function stopRec(){
+  if (!isRecording()) return;
+  rec.stop();
+  stream.getTracks().forEach(t => { t.onended = null; t.stop(); });
+  clearInterval(tick);
+  releaseWake();
+  $('#recZone').classList.remove('recording');
+  $('#recLabel').textContent = '녹음';
+  $('#recBtn').setAttribute('aria-label', '녹음 시작');
+  ring.style.strokeDashoffset = CIRC;
+}
+// 새 녹음이 이미 시작됐으면 타이머 문구를 건드리지 않는다
+function setIdleMsg(msg){ if (!isRecording()) $('#timer').textContent = msg; }
+async function onRecStop(){
+  const dur = (Date.now() - startAt) / 1000;
+  const mime = rec.mimeType || 'audio/webm';
+  if (dur < 1.2){ setIdleMsg('너무 짧아서 저장하지 않았습니다'); return; }
+  const blob = new Blob(chunks, {type: mime});
+  const id = 'm' + Date.now();
+  try{ await idb.put(id, blob); }catch(e){ toast('녹음 저장에 실패했습니다'); return; }
+  memos.unshift({id, kind:'voice', created:Date.now(), dur:Math.round(dur), status:'pending'});
+  saveMemos(); render();
+  setIdleMsg('저장했습니다. 정리하는 중…');
+  await processMemo(id);
+  setIdleMsg(IDLE_MSG);
+}
+
+/* ---------- Gemini 정리 ---------- */
+function buildPrompt(text){
+  return `너는 작가 '누에마'의 아이디어 메모 정리 도우미다. 누에마는 사물을 의인화한 짧은 산문시를 쓰고 유튜브 쇼츠 채널 '마음 배달부'를 운영하며, 배송 관리 일을 하면서 틈틈이 떠오른 생각을 짧게 메모한다.
+${text ? '아래 글 메모를' : '첨부된 음성 메모를 듣고'} 정리해라.
+
+반드시 아래 JSON 하나만 출력한다. 마크다운이나 설명 문장은 쓰지 않는다.
+{
+  "transcript": "${text ? '입력된 글을 그대로' : '들은 내용을 그대로 받아쓰기. 음, 어 같은 군말만 빼고 내용은 더하지도 빼지도 않는다'}",
+  "title": "15자 이내 제목",
+  "category": "글감 | 쇼츠 | 앱 | 업무 | 기타 중 하나",
+  "points": ["원문에 실제로 있는 핵심 2~5개"],
+  "tags": ["키워드 2~5개"],
+  "check": {
+    "good": ["살릴 만한 지점 1~2개, 근거와 함께"],
+    "weak": ["모호하거나 비어 있는 부분 1~3개"],
+    "questions": ["더 생각해볼 질문 1~3개"]
+  },
+  "extend": ["원문에 없는, AI가 덧붙이는 발전 방향 2~3개"],
+  "draft": "category가 글감이면 3~6줄짜리 산문시 초안, 아니면 빈 문자열"
+}
+
+규칙:
+- points에는 원문에 없는 내용을 넣지 않는다. AI의 생각은 check, extend, draft에만 넣는다.
+- 사실 정보가 불확실하면 단정하지 말고 확인이 필요하다고 적는다.
+${cfg.guide ? '추가 지시:\n' + cfg.guide : ''}
+${text ? '\n메모:\n' + text : ''}`;
+}
+function parseJSON(t){
+  const clean = t.replace(/```json|```/g, '').trim();
+  try{ return JSON.parse(clean); }catch(e){
+    const a = clean.indexOf('{'), b = clean.lastIndexOf('}');
+    if (a >= 0 && b > a) return JSON.parse(clean.slice(a, b + 1));
+    throw new Error('AI 응답을 읽지 못했습니다');
+  }
+}
+async function processMemo(id){
+  const m = memos.find(x => x.id === id); if (!m) return;
+  if (m.kind === 'voice' && m.noAudio){ toast('녹음 원본을 지운 메모라 다시 정리할 수 없습니다'); return; }
+  if (!cfg.key){ m.status = 'error'; m.err = '설정에서 Gemini API 키를 입력하세요'; saveMemos(); render(); openSettings(); return; }
+  const prev = m.status === 'done' ? m.r : null;   // 다시 정리가 실패해도 이전 결과는 지키기 위해
+  m.status = 'working'; m.err = ''; saveMemos(); render(); if (openId === id) openDetail(id);
+  try{
+    let parts;
+    if (m.kind === 'voice'){
+      const blob = await idb.get(id);
+      if (!blob) throw new Error('녹음 파일이 이 기기에 없습니다');
+      let audio;
+      try{ const wav = await toWav16k(blob); audio = {inline_data:{mime_type:'audio/wav', data: await toB64(wav)}}; }
+      catch(e){ audio = {inline_data:{mime_type:(blob.type || 'audio/webm').split(';')[0], data: await toB64(blob)}}; }
+      parts = [audio, {text: buildPrompt('')}];
+    } else {
+      parts = [{text: buildPrompt(m.text)}];
+    }
+    // 키는 URL이 아니라 헤더로 보낸다 (히스토리·프록시 로그에 남지 않게)
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(cfg.model)}:generateContent`;
+    const res = await fetch(url, {
+      method:'POST', headers:{'Content-Type':'application/json', 'x-goog-api-key': cfg.key},
+      body: JSON.stringify({contents:[{role:'user', parts}], generationConfig:{responseMimeType:'application/json', temperature:0.6}})
+    });
+    if (!res.ok){
+      const t = await res.text();
+      let msg = t; try{ msg = JSON.parse(t).error.message; }catch(e){}
+      throw new Error(`Gemini 오류 ${res.status}: ${String(msg).slice(0, 140)}`);
+    }
+    const d = await res.json();
+    const txt = ((d.candidates && d.candidates[0] && d.candidates[0].content && d.candidates[0].content.parts) || []).map(p => p.text || '').join('');
+    if (!txt) throw new Error('AI가 빈 응답을 보냈습니다. 다시 정리해 보세요');
+    m.r = parseJSON(txt);
+    if (!CATS.some(c => c.k === m.r.category)) m.r.category = '기타';
+    m.status = 'done';
+  }catch(e){
+    const msg = e.message || String(e);
+    if (prev){ m.r = prev; m.status = 'done'; m.err = ''; toast('다시 정리하지 못했습니다. 이전 결과를 유지합니다 — ' + msg); }
+    else { m.status = 'error'; m.err = msg; }
+  }
+  saveMemos(); render();
+  if (openId === id) openDetail(id);
+  if (m.status === 'error') toast(m.err);
+}
+
+/* ---------- 목록 ---------- */
+function renderFilters(){
+  const counts = {};
+  memos.forEach(m => { const k = m.r ? m.r.category : null; if (k) counts[k] = (counts[k] || 0) + 1; });
+  const keys = ['전체', ...CATS.map(c => c.k)];
+  $('#filters').innerHTML = keys.map(k =>
+    `<button class="chip" aria-pressed="${k === filter}" data-k="${k}">${k}${k !== '전체' && counts[k] ? ' ' + counts[k] : ''}</button>`).join('');
+}
+$('#filters').onclick = e => { const b = e.target.closest('.chip'); if (!b) return; filter = b.dataset.k; render(); };
+$('#search').oninput = () => renderList();
+
+function visibleMemos(){
+  const q = $('#search').value.trim().toLowerCase();
+  return memos.filter(m => {
+    if (filter !== '전체' && (!m.r || m.r.category !== filter)) return false;
+    if (!q) return true;
+    const hay = [m.text, m.r && m.r.title, m.r && m.r.transcript, m.r && arr(m.r.tags).join(' ')].join(' ').toLowerCase();
+    return hay.includes(q);
+  });
+}
+function renderList(){
+  const list = visibleMemos();
+  if (!list.length){
+    $('#list').innerHTML = `<li class="empty">${memos.length ? '조건에 맞는 메모가 없습니다' : '녹음 버튼을 눌러 첫 아이디어를 남겨보세요'}</li>`;
+    return;
+  }
+  $('#list').innerHTML = list.map(m => {
+    let title, sub, color = '#A39E92', cat = '';
+    if (m.status === 'done' && m.r){
+      title = m.r.title || '제목 없음'; sub = arr(m.r.points)[0] || m.r.transcript || '';
+      color = catColor(m.r.category); cat = m.r.category;
+    } else if (m.status === 'error'){
+      title = '정리 실패'; sub = `<span class="state-err">${esc(m.err)}</span>`;
+    } else {
+      title = '정리하는 중…'; sub = m.kind === 'voice' ? `${m.dur}초 녹음` : (m.text || '').slice(0, 60);
+    }
+    return `<li class="item"><button data-id="${m.id}">
+      <div class="meta"><span class="cat-dot" style="background:${color}"></span>${esc(cat)} ${fmtDate(m.created)}${m.kind === 'voice' ? ' 🎙' : ' ✎'}</div>
+      <div class="item-title">${esc(title)}</div>
+      <div class="item-sub">${m.status === 'error' ? sub : esc(sub)}</div>
+    </button></li>`;
+  }).join('');
+}
+$('#list').onclick = e => { const b = e.target.closest('button[data-id]'); if (b) openDetail(b.dataset.id); };
+function render(){ renderFilters(); renderList(); }
+
+/* ---------- 시트 ---------- */
+let audioUrl = null, sheetOpener = null;
+function showSheet(html){
+  const sheet = $('#sheet'), wasOpen = sheet.classList.contains('open');
+  $('#sheetBody').innerHTML = html;
+  // 시트 제목을 대화상자 이름으로 쓰고, 열릴 때 포커스를 시트로 옮긴다 (스크린리더·키보드용)
+  const h2 = $('#sheetBody h2');
+  sheet.setAttribute('aria-label', h2 ? h2.textContent.trim() : '메모');
+  if (!wasOpen){ sheetOpener = document.activeElement; sheet.scrollTop = 0; }
+  sheet.classList.add('open'); $('#sheetBg').classList.add('open');
+  if (!wasOpen) sheet.focus({preventScroll:true});
+}
+function closeSheet(){
+  const sheet = $('#sheet');
+  if (!sheet.classList.contains('open')) return;
+  sheet.classList.remove('open'); $('#sheetBg').classList.remove('open');
+  openId = null;
+  if (audioUrl){ URL.revokeObjectURL(audioUrl); audioUrl = null; }
+  if (sheetOpener && sheetOpener.focus && document.contains(sheetOpener)) sheetOpener.focus({preventScroll:true});
+  sheetOpener = null;
+}
+$('#sheetBg').onclick = closeSheet;
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeSheet(); });
+
+/* 삭제는 바로 목록에서 빼되, 6초 동안 되돌릴 수 있게 하고 그 뒤에 녹음까지 지운다 */
+let pendingDel = null;
+function commitDelete(){
+  if (!pendingDel) return;
+  const {m, t} = pendingDel; clearTimeout(t); pendingDel = null;
+  if (m.kind === 'voice') idb.del(m.id).catch(() => {});
+}
+function undoDelete(){
+  if (!pendingDel) return;
+  const {m, idx, t} = pendingDel; clearTimeout(t); pendingDel = null;
+  memos.splice(Math.min(idx, memos.length), 0, m);
+  saveMemos(); render(); toast('되돌렸습니다');
+}
+function deleteMemo(id){
+  const idx = memos.findIndex(x => x.id === id); if (idx < 0) return;
+  commitDelete();   // 앞서 되돌리기 대기 중이던 게 있으면 확정
+  const m = memos[idx];
+  memos = memos.filter(x => x.id !== id); saveMemos();
+  closeSheet(); render();
+  pendingDel = {m, idx, t: setTimeout(commitDelete, 6000)};
+  toast('삭제했습니다', {label:'되돌리기', fn: undoDelete});
+}
+window.addEventListener('pagehide', commitDelete);
+
+const ul = a => arr(a).length ? `<ul>${arr(a).map(x => `<li>${esc(x)}</li>`).join('')}</ul>` : '<p class="hint">없음</p>';
+
+async function openDetail(id){
+  const m = memos.find(x => x.id === id); if (!m) return;
+  openId = id;
+  const r = m.r || {};
+  let body = '';
+  if (m.status === 'done'){
+    const c = r.check || {};
+    body = `
+      <div class="meta"><span class="cat-dot" id="detailDot" style="background:${catColor(r.category)}"></span><span id="detailCat">${esc(r.category)}</span> ${fmtDate(m.created)}</div>
+      <div class="title-row"><h2 id="detailTitle">${esc(r.title)}</h2><button class="link-btn" data-act="edittitle">제목 고치기</button></div>
+      <div class="cat-edit" aria-label="분류 바꾸기">${CATS.map(c =>
+        `<button class="chip" data-cat="${c.k}" aria-pressed="${c.k === r.category}">${c.k}</button>`).join('')}</div>
+      <div class="tags">${arr(r.tags).map(t => `<span class="tag">${esc(t)}</span>`).join('')}</div>
+      <div id="audioSlot">${m.noAudio ? '<p class="hint">녹음 원본은 지웠고 받아쓴 글만 남아 있습니다.</p>' : ''}</div>
+      <h3>내가 한 말</h3>
+      <p class="transcript">${esc(r.transcript || m.text)}</p>
+      <h3>핵심</h3>${ul(r.points)}
+      <div class="ai-block">
+        <p class="ai-note">여기부터는 AI 의견입니다</p>
+        <h4>살릴 점</h4>${ul(c.good)}
+        <h4>비어 있는 곳</h4>${ul(c.weak)}
+        <h4>생각해볼 질문</h4>${ul(c.questions)}
+        <h4>덧붙인 방향</h4>${ul(r.extend)}
+        ${r.draft ? `<h4>초안</h4><p class="draft">${esc(r.draft)}</p>` : ''}
+      </div>`;
+  } else if (m.status === 'error'){
+    body = `<h2>정리하지 못했습니다</h2><p class="state-err">${esc(m.err)}</p><div id="audioSlot"></div>
+      ${m.text ? `<p class="transcript">${esc(m.text)}</p>` : ''}`;
+  } else {
+    body = `<h2>정리하는 중…</h2><p class="hint">잠시 기다리면 자동으로 바뀝니다.</p><div id="audioSlot"></div>`;
+  }
+  const canRedo = m.status !== 'working' && !(m.kind === 'voice' && m.noAudio);
+  body += `<div class="actions">
+    ${canRedo ? `<button class="btn primary" data-act="redo">${m.status === 'done' ? '다시 정리' : '정리하기'}</button>` : ''}
+    ${m.status === 'done' ? `<button class="btn" data-act="copy">글로 복사</button><button class="btn" data-act="ppt">PPT 만들기</button>` : ''}
+    <button class="btn danger" data-act="del">삭제</button>
+    <button class="btn" data-act="close">닫기</button>
+  </div>`;
+  showSheet(body);
+  if (m.kind === 'voice' && !m.noAudio){
+    try{
+      const blob = await idb.get(id);
+      if (blob && openId === id){
+        if (audioUrl) URL.revokeObjectURL(audioUrl);
+        audioUrl = URL.createObjectURL(blob);
+        const slot = $('#audioSlot'); if (slot) slot.innerHTML = `<audio controls src="${audioUrl}"></audio>`;
+      }
+    }catch(e){}
+  }
+}
+
+$('#sheetBody').onclick = e => {
+  const id = openId, m = memos.find(x => x.id === id);
+  // 분류 칩: 시트를 다시 그리지 않고 제자리에서 바꾼다 (재생 중인 오디오가 끊기지 않게)
+  const cb = e.target.closest('[data-cat]');
+  if (cb && m && m.r){
+    m.r.category = cb.dataset.cat; saveMemos(); render();
+    $('#sheetBody').querySelectorAll('[data-cat]').forEach(x => x.setAttribute('aria-pressed', x === cb));
+    $('#detailDot').style.background = catColor(m.r.category); $('#detailCat').textContent = m.r.category;
+    return;
+  }
+  const b = e.target.closest('[data-act]'); if (!b) return;
+  const act = b.dataset.act;
+  if (act === 'close') return closeSheet();
+  if (act === 'redo') return processMemo(id);
+  if (act === 'copy') return copyMemo(m);
+  if (act === 'ppt') return makeDeck([m], (m.r.title || '메모').slice(0, 30));
+  if (act === 'del') return deleteMemo(id);
+  if (act === 'edittitle') return editTitle(m);
+  if (act === 'savecfg') return saveSettings();
+  if (act === 'export') return exportJSON();
+  if (act === 'import') return $('#importFile').click();
+  if (act === 'purgeaudio') return purgeAudio();
+  if (act === 'savetext') return saveTextMemo();
+  if (act === 'resetguide'){ $('#cfgGuide').value = DEFAULT_GUIDE; }
+};
+
+function editTitle(m){
+  const h2 = $('#detailTitle'); if (!h2 || !m || !m.r) return;
+  const row = h2.parentElement;
+  const input = document.createElement('input');
+  input.className = 'title-edit'; input.value = m.r.title || ''; input.maxLength = 40; input.setAttribute('aria-label', '제목');
+  row.replaceWith(input); input.focus(); input.select();
+  let done = false;
+  const finish = save => {
+    if (done) return; done = true;
+    if (save){ const v = input.value.trim(); if (v){ m.r.title = v; saveMemos(); render(); } }
+    openDetail(m.id);
+  };
+  input.onkeydown = ev => { if (ev.key === 'Enter'){ ev.preventDefault(); finish(true); } if (ev.key === 'Escape'){ ev.stopPropagation(); finish(false); } };
+  input.onblur = () => finish(true);
+}
+
+function copyMemo(m){
+  const r = m.r, c = r.check || {};
+  const li = a => arr(a).map(x => '- ' + x).join('\n') || '- 없음';
+  const md = `# ${r.title}\n${r.category} | ${fmtDate(m.created)}\n\n## 내가 한 말\n${r.transcript || m.text}\n\n## 핵심\n${li(r.points)}\n\n## AI 체크\n살릴 점\n${li(c.good)}\n비어 있는 곳\n${li(c.weak)}\n생각해볼 질문\n${li(c.questions)}\n\n## 덧붙인 방향 (AI)\n${li(r.extend)}${r.draft ? '\n\n## 초안 (AI)\n' + r.draft : ''}`;
+  copyText(md).then(ok => toast(ok ? '복사했습니다' : '복사에 실패했습니다. 길게 눌러 직접 복사해 주세요'));
+}
+
+/* 정리 끝난 녹음 원본만 일괄 삭제 — 받아쓴 글과 정리 결과는 그대로 */
+async function purgeAudio(){
+  const targets = memos.filter(m => m.kind === 'voice' && m.status === 'done' && !m.noAudio);
+  if (!targets.length){ toast('지울 녹음 원본이 없습니다'); return; }
+  if (!confirm(`정리 완료된 녹음 원본 ${targets.length}개를 지울까요?\n받아쓴 글과 정리 내용은 그대로 남지만, 다시 정리하기는 할 수 없게 됩니다.`)) return;
+  let n = 0;
+  for (const m of targets){ try{ await idb.del(m.id); m.noAudio = true; n++; }catch(e){} }
+  saveMemos(); render(); closeSheet(); toast(`녹음 원본 ${n}개를 지웠습니다`);
+}
+
+/* 글 메모 */
+$('#btnText').onclick = () => showSheet(`
+  <h2>글로 적기</h2>
+  <textarea id="memoText" placeholder="떠오른 생각을 적어두세요"></textarea>
+  <div class="actions"><button class="btn primary" data-act="savetext">정리하기</button><button class="btn" data-act="close">닫기</button></div>`);
+async function saveTextMemo(){
+  const t = $('#memoText').value.trim();
+  if (!t){ toast('내용을 입력하세요'); return; }
+  const id = 'm' + Date.now();
+  memos.unshift({id, kind:'text', text:t, created:Date.now(), status:'pending'});
+  saveMemos(); closeSheet(); render();
+  processMemo(id);
+}
+
+/* 설정 */
+$('#btnSettings').onclick = openSettings;
+function openSettings(){
+  showSheet(`
+    <h2>설정</h2>
+    <label class="field">Gemini API 키
+      <input id="cfgKey" type="password" autocomplete="off" value="${esc(cfg.key)}" placeholder="AIza…"></label>
+    <p class="hint">이 기기 브라우저에만 저장됩니다. 코드에 넣지 마세요.</p>
+    <label class="field">모델 이름
+      <input id="cfgModel" value="${esc(cfg.model)}"></label>
+    <p class="hint">새 모델이 나오면 이름만 바꾸면 됩니다.</p>
+    <label class="field">AI에게 줄 추가 지시
+      <textarea id="cfgGuide">${esc(cfg.guide)}</textarea></label>
+    <button class="link-btn" data-act="resetguide">기본 지시로 되돌리기</button>
+    <div class="actions">
+      <button class="btn primary" data-act="savecfg">저장</button>
+      <button class="btn" data-act="export">백업 내보내기</button>
+      <button class="btn" data-act="import">백업 가져오기</button>
+      <button class="btn" data-act="close">닫기</button>
+    </div>
+    <p class="hint">백업에는 정리된 글만 들어가고 녹음 파일은 빠집니다.</p>
+    <h3>저장 공간</h3>
+    <button class="btn" data-act="purgeaudio">정리 끝난 녹음 원본 지우기</button>
+    <p class="hint">받아쓴 글과 정리 결과는 남기고 음성 파일만 지웁니다. 지운 메모는 다시 정리할 수 없습니다.</p>`);
+}
+function saveSettings(){
+  cfg.key = $('#cfgKey').value.trim();
+  cfg.model = $('#cfgModel').value.trim() || 'gemini-2.5-flash';
+  cfg.guide = $('#cfgGuide').value.trim();
+  store.set('nuema_cfg_v1', cfg);
+  closeSheet(); toast('저장했습니다');
+}
+function exportJSON(){
+  const blob = new Blob([JSON.stringify({v:1, memos}, null, 2)], {type:'application/json'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `누에마메모_백업_${new Date().toISOString().slice(0,10)}.json`;
+  a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
+$('#importFile').onchange = async e => {
+  const f = e.target.files[0]; if (!f) return;
+  try{
+    const data = JSON.parse(await f.text());
+    const incoming = arr(data.memos);
+    const have = new Set(memos.map(m => m.id));
+    const add = incoming.filter(m => m && m.id && !have.has(m.id)).map(normalizeMemo);
+    // 가져온 음성 메모는 이 기기에 녹음 원본이 없으므로 그렇게 표시
+    add.forEach(m => { if (m.kind === 'voice' && m.status === 'done') m.noAudio = true; });
+    memos = [...memos, ...add].sort((a, b) => b.created - a.created);
+    saveMemos(); render(); closeSheet(); toast(`${add.length}개를 가져왔습니다`);
+  }catch(err){ toast('백업 파일을 읽지 못했습니다'); }
+  e.target.value = '';
+};
+
+/* ---------- PPT ---------- */
+function loadPptx(){
+  if (window.PptxGenJS) return Promise.resolve();
+  return new Promise((ok, no) => {
+    const s = document.createElement('script');
+    s.src = 'https://cdn.jsdelivr.net/npm/pptxgenjs@3.12.0/dist/pptxgen.bundle.js';
+    s.onload = ok; s.onerror = () => no(new Error('PPT 도구를 불러오지 못했습니다. 인터넷 연결을 확인하세요'));
+    document.head.appendChild(s);
+  });
+}
+$('#btnDeck').onclick = () => {
+  const list = visibleMemos().filter(m => m.status === 'done');
+  if (!list.length){ toast('정리된 메모가 없습니다'); return; }
+  makeDeck(list, `아이디어 모음 ${filter === '전체' ? '' : filter}`.trim());
+};
+
+async function makeDeck(list, name){
+  try{ toast('PPT 만드는 중…'); await loadPptx(); }catch(e){ toast(e.message); return; }
+  const P = new PptxGenJS();
+  P.layout = 'LAYOUT_16x9';
+  const F = 'Malgun Gothic', BG = 'F7F4EC', SILK = '2A2924', DIM = '6E6A61', AI = '5E6688';
+  const bullets = (a, color) => arr(a).length
+    ? arr(a).map(x => ({text: String(x), options:{bullet:true, color, breakLine:true}}))
+    : [{text:'없음', options:{color:DIM}}];
+  const head = (s, title, sub, col) => {
+    s.background = {color: BG};
+    s.addShape(P.ShapeType.rect, {x:0.5, y:0.45, w:0.08, h:0.55, fill:{color: col || '7B8A6C'}, line:{color: col || '7B8A6C'}});
+    s.addText(title, {x:0.72, y:0.35, w:8.8, h:0.55, fontFace:F, fontSize:26, bold:true, color:SILK});
+    if (sub) s.addText(sub, {x:0.72, y:0.88, w:8.8, h:0.3, fontFace:F, fontSize:12, color:DIM});
+  };
+  const hex = k => catColor(k).replace('#', '');
+
+  if (list.length === 1){
+    const m = list[0], r = m.r, c = r.check || {}, col = hex(r.category);
+    let s = P.addSlide(); s.background = {color: BG};
+    s.addText(r.title, {x:0.8, y:1.8, w:8.4, h:1, fontFace:F, fontSize:38, bold:true, color:SILK});
+    s.addText(`${r.category}  |  ${fmtDate(m.created)}  |  누에마`, {x:0.8, y:2.85, w:8.4, h:0.4, fontFace:F, fontSize:14, color:DIM});
+    s.addShape(P.ShapeType.rect, {x:0.8, y:1.6, w:1.2, h:0.06, fill:{color:col}, line:{color:col}});
+
+    s = P.addSlide(); head(s, '내가 한 말', '녹음 원문', col);
+    s.addText(String(r.transcript || m.text || ''), {x:0.72, y:1.4, w:8.6, h:3.8, fontFace:F, fontSize:15, color:SILK, valign:'top', fit:'shrink', lineSpacingMultiple:1.3});
+
+    s = P.addSlide(); head(s, '핵심', arr(r.tags).join('   '), col);
+    s.addText(bullets(r.points, SILK), {x:0.72, y:1.4, w:8.6, h:3.8, fontFace:F, fontSize:20, valign:'top', paraSpaceAfter:10});
+
+    s = P.addSlide(); head(s, 'AI 체크', 'AI 의견', AI);
+    const cols = [['살릴 점', c.good], ['비어 있는 곳', c.weak], ['생각해볼 질문', c.questions]];
+    cols.forEach(([t, a], i) => {
+      const x = 0.72 + i * 2.95;
+      s.addText(t, {x, y:1.4, w:2.75, h:0.4, fontFace:F, fontSize:15, bold:true, color:AI});
+      s.addText(bullets(a, SILK), {x, y:1.85, w:2.75, h:3.4, fontFace:F, fontSize:12, valign:'top', fit:'shrink', paraSpaceAfter:6});
+    });
+
+    s = P.addSlide(); head(s, '덧붙인 방향', 'AI 제안', AI);
+    if (r.draft){
+      s.addText(bullets(r.extend, SILK), {x:0.72, y:1.4, w:4.2, h:3.8, fontFace:F, fontSize:14, valign:'top', fit:'shrink', paraSpaceAfter:8});
+      s.addShape(P.ShapeType.rect, {x:5.2, y:1.4, w:4.3, h:3.8, fill:{color:'EFEBE1'}, line:{color:'EFEBE1'}});
+      s.addText(String(r.draft), {x:5.4, y:1.55, w:3.9, h:3.5, fontFace:F, fontSize:14, color:SILK, valign:'top', fit:'shrink', lineSpacingMultiple:1.4});
+    } else {
+      s.addText(bullets(r.extend, SILK), {x:0.72, y:1.4, w:8.6, h:3.8, fontFace:F, fontSize:18, valign:'top', paraSpaceAfter:10});
+    }
+  } else {
+    let s = P.addSlide(); s.background = {color: BG};
+    s.addText(name, {x:0.8, y:1.8, w:8.4, h:1, fontFace:F, fontSize:36, bold:true, color:SILK});
+    s.addText(`메모 ${list.length}개  |  ${fmtDate(Date.now())}`, {x:0.8, y:2.85, w:8.4, h:0.4, fontFace:F, fontSize:14, color:DIM});
+    list.forEach(m => {
+      const r = m.r;
+      s = P.addSlide(); head(s, r.title || '제목 없음', `${r.category}  |  ${fmtDate(m.created)}`, hex(r.category));
+      s.addText('핵심', {x:0.72, y:1.4, w:4.2, h:0.4, fontFace:F, fontSize:14, bold:true, color:DIM});
+      s.addText(bullets(r.points, SILK), {x:0.72, y:1.85, w:4.2, h:3.4, fontFace:F, fontSize:14, valign:'top', fit:'shrink', paraSpaceAfter:6});
+      s.addText('AI 제안', {x:5.2, y:1.4, w:4.3, h:0.4, fontFace:F, fontSize:14, bold:true, color:AI});
+      s.addText(bullets(r.extend, SILK), {x:5.2, y:1.85, w:4.3, h:3.4, fontFace:F, fontSize:14, valign:'top', fit:'shrink', paraSpaceAfter:6});
+    });
+  }
+  try{
+    await P.writeFile({fileName: `${name.replace(/[\\/:*?"<>|]/g, '')}.pptx`});
+    toast('PPT를 내려받았습니다');
+  }catch(e){ toast('PPT 저장에 실패했습니다'); }
+}
+
+/* ---------- 시작 ---------- */
+memos.forEach(normalizeMemo);
+saveMemos();
+render();
+if (!cfg.key) setTimeout(() => toast('설정에서 Gemini API 키를 먼저 입력하세요'), 600);
+</script>
+</body>
+</html>
