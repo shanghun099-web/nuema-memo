@@ -693,12 +693,20 @@ function memoPayload(m){
     good: arr(c.good), weak: arr(c.weak), questions: arr(c.questions), extend: arr(r.extend), draft: r.draft || ''
   };
 }
+/* Apps Script 응답 읽기. JSON 대신 HTML이 오면 구글 로그인/권한 페이지라는 뜻 */
+async function readScriptJSON(res){
+  const t = await res.text();
+  try{ return JSON.parse(t); }catch(e){
+    if (/<!doctype|<html/i.test(t)) throw new Error('구글이 로그인 페이지를 돌려줬습니다. 배포 관리 → 연필 → 액세스 권한을 "모든 사용자"로 바꾸고 "새 버전"으로 배포하세요');
+    throw new Error('스크립트 응답을 읽지 못했습니다: ' + t.slice(0, 80));
+  }
+}
 async function sendToDocs(m, quiet){
   if (!gdocReady()){ if (!quiet) toast('설정에서 구글 독스 연동 URL을 먼저 넣어주세요'); return false; }
   if (!m || m.status !== 'done') return false;
   try{
     const res = await fetch(cfg.gdocUrl, {method:'POST', body: JSON.stringify(memoPayload(m))});
-    const d = await res.json();
+    const d = await readScriptJSON(res);
     if (!d.ok) throw new Error(d.error || '스크립트가 실패를 돌려줬습니다');
     m.gdoc = {at: Date.now(), url: d.url || ''};
     saveMemos();
@@ -734,11 +742,11 @@ async function testDocs(){
   if (!/^https:\/\/script\.google\.com\/macros\/s\/[\w-]+\/exec$/.test(url)){ toast('URL 형식이 다릅니다. …/exec 로 끝나는 웹앱 URL을 넣어주세요'); return; }
   toast('연결 확인 중…');
   try{
-    const d = await (await fetch(url)).json();
+    const d = await readScriptJSON(await fetch(url));
     if (!d.ok) throw new Error(d.error || '응답이 이상합니다');
     if (d.v !== 2) toast('연결은 됐지만 스크립트가 예전 버전입니다. 새 코드로 바꾸고 "새 버전"으로 배포하면 다시 보내기가 덮어쓰기로 동작합니다', {label:'확인', fn(){}, ms:9000});
     else toast(d.url ? '연결됐습니다. 문서가 준비되어 있습니다' : '연결됐습니다');
-  }catch(e){ toast('연결 실패: 배포 시 "액세스 권한: 모든 사용자"인지 확인하세요'); }
+  }catch(e){ toast('연결 실패: ' + (e.message || e), {label:'확인', fn(){}, ms:9000}); }
 }
 
 /* 정리 끝난 녹음 원본만 일괄 삭제 — 받아쓴 글과 정리 결과는 그대로 */
