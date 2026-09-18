@@ -556,6 +556,7 @@ function commitDelete(){
   if (!pendingDel) return;
   const {m, t} = pendingDel; clearTimeout(t); pendingDel = null;
   if (m.kind === 'voice') idb.del(m.id).catch(() => {});
+  if (m.gdoc && gdocReady()) fetch(cfg.gdocUrl, {method:'POST', body: JSON.stringify({action:'delete', id:m.id, created:fmtDate(m.created), kind:m.kind})}).catch(() => {});
 }
 function undoDelete(){
   if (!pendingDel) return;
@@ -744,7 +745,7 @@ async function testDocs(){
   try{
     const d = await readScriptJSON(await fetch(url));
     if (!d.ok) throw new Error(d.error || '응답이 이상합니다');
-    if (d.v !== 2) toast('연결은 됐지만 스크립트가 예전 버전입니다. 새 코드로 바꾸고 "새 버전"으로 배포하면 다시 보내기가 덮어쓰기로 동작합니다', {label:'확인', fn(){}, ms:9000});
+    if (!(d.v >= 2)) toast('연결은 됐지만 스크립트가 예전 버전입니다. 새 코드로 바꾸고 "새 버전"으로 배포하면 다시 보내기가 덮어쓰기로 동작합니다', {label:'확인', fn(){}, ms:9000});
     else toast(d.url ? '연결됐습니다. 문서가 준비되어 있습니다' : '연결됐습니다');
   }catch(e){ toast('연결 실패: ' + (e.message || e), {label:'확인', fn(){}, ms:9000}); }
 }
