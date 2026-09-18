@@ -477,7 +477,7 @@ async function processMemo(id){
   saveMemos(); render();
   if (openId === id) openDetail(id);
   if (m.status === 'error') toast(m.err);
-  if (m.status === 'done' && cfg.gdocAuto !== false && gdocReady() && !m.gdoc) sendToDocs(m, true);
+  if (m.status === 'done' && cfg.gdocAuto !== false && gdocReady()) sendToDocs(m, true);
 }
 
 /* ---------- 목록 ---------- */
@@ -632,7 +632,7 @@ $('#sheetBody').onclick = e => {
   // 분류 칩: 시트를 다시 그리지 않고 제자리에서 바꾼다 (재생 중인 오디오가 끊기지 않게)
   const cb = e.target.closest('[data-cat]');
   if (cb && m && m.r){
-    m.r.category = cb.dataset.cat; saveMemos(); render();
+    m.r.category = cb.dataset.cat; saveMemos(); render(); scheduleDocSync(m);
     $('#sheetBody').querySelectorAll('[data-cat]').forEach(x => x.setAttribute('aria-pressed', x === cb));
     $('#detailDot').style.background = catColor(m.r.category); $('#detailCat').textContent = m.r.category;
     return;
@@ -666,7 +666,7 @@ function editTitle(m){
   let done = false;
   const finish = save => {
     if (done) return; done = true;
-    if (save){ const v = input.value.trim(); if (v){ m.r.title = v; saveMemos(); render(); } }
+    if (save){ const v = input.value.trim(); if (v && v !== m.r.title){ m.r.title = v; saveMemos(); render(); scheduleDocSync(m); } }
     openDetail(m.id);
   };
   input.onkeydown = ev => { if (ev.key === 'Enter'){ ev.preventDefault(); finish(true); } if (ev.key === 'Escape'){ ev.stopPropagation(); finish(false); } };
@@ -703,7 +703,10 @@ async function sendToDocs(m, quiet){
     m.gdoc = {at: Date.now(), url: d.url || ''};
     saveMemos();
     if (openId === m.id) openDetail(m.id);
-    if (!quiet) toast(d.dup ? '이미 독스에 있는 메모입니다' : '구글 독스에 보냈습니다');
+    if (!quiet) toast(d.replaced ? '독스의 항목을 새 내용으로 바꿨습니다'
+      : d.legacy ? '예전 방식으로 보낸 메모라 문서 끝에 새로 붙였습니다. 옛 항목은 직접 지워주세요'
+      : d.dup ? '이미 독스에 있습니다. 스크립트를 새 버전으로 바꾸면 덮어쓸 수 있습니다'
+      : '구글 독스에 보냈습니다');
     return true;
   }catch(e){
     if (!quiet) toast('독스 전송 실패: ' + (e.message || e));
@@ -711,6 +714,12 @@ async function sendToDocs(m, quiet){
   }
 }
 /* 아직 안 보낸 정리 완료 메모를 오래된 것부터 차례로 */
+/* 제목·분류를 고친 뒤 4초 동안 더 고치지 않으면 독스에도 반영 (이미 보낸 메모만) */
+function scheduleDocSync(m){
+  if (!m || !m.gdoc || cfg.gdocAuto === false || !gdocReady()) return;
+  clearTimeout(scheduleDocSync._t);
+  scheduleDocSync._t = setTimeout(() => sendToDocs(m, true), 4000);
+}
 async function sendAllToDocs(){
   if (!gdocReady()){ toast('설정에서 구글 독스 연동 URL을 먼저 넣어주세요'); return; }
   const list = memos.filter(m => m.status === 'done' && !m.gdoc).sort((a, b) => a.created - b.created);
@@ -727,7 +736,8 @@ async function testDocs(){
   try{
     const d = await (await fetch(url)).json();
     if (!d.ok) throw new Error(d.error || '응답이 이상합니다');
-    toast(d.url ? '연결됐습니다. 문서가 준비되어 있습니다' : '연결됐습니다');
+    if (d.v !== 2) toast('연결은 됐지만 스크립트가 예전 버전입니다. 새 코드로 바꾸고 "새 버전"으로 배포하면 다시 보내기가 덮어쓰기로 동작합니다', {label:'확인', fn(){}, ms:9000});
+    else toast(d.url ? '연결됐습니다. 문서가 준비되어 있습니다' : '연결됐습니다');
   }catch(e){ toast('연결 실패: 배포 시 "액세스 권한: 모든 사용자"인지 확인하세요'); }
 }
 
