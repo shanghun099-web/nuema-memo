@@ -107,6 +107,9 @@ header h1{font-family:var(--serif);font-weight:400;font-size:1.05rem;margin:0;le
 .ai-block h4:first-of-type{margin-top:6px}
 .ai-block li::before{background:var(--ai);opacity:.6}
 .ai-note{font-size:.74rem;color:var(--ai);margin:0 0 4px;letter-spacing:.08em}
+.ai-toggle{color:var(--ai);text-decoration-color:var(--ai);margin-top:22px;padding-left:0;display:block}
+.ai-wait{font-size:.82rem;color:var(--ai);margin-top:22px;letter-spacing:.04em}
+.ai-block .link-btn{margin-top:18px;padding-left:0;display:block}
 .draft{font-family:var(--serif);white-space:pre-wrap;line-height:2.1;background:none;border-top:1px solid var(--line);border-bottom:1px solid var(--line);border-radius:0;padding:16px 2px;margin:8px 0 0;font-size:1rem}
 .tags{display:flex;flex-wrap:wrap;gap:4px 14px;margin-top:10px}
 .tag{font-size:.78rem;color:var(--ink-3);border:none;padding:0;letter-spacing:.04em}
@@ -404,21 +407,42 @@ ${text ? '아래 글 메모를' : '첨부된 음성 메모를 듣고'} 정리해
   "title": "15자 이내 제목",
   "category": "글감 | 쇼츠 | 앱 | 업무 | 기타 중 하나",
   "points": ["원문에 실제로 있는 핵심 2~5개"],
-  "tags": ["키워드 2~5개"],
+  "tags": ["키워드 2~5개"]
+}
+
+규칙:
+- points에는 원문에 없는 내용을 넣지 않는다. 너의 의견·제안은 넣지 않는다 (의견은 따로 요청받을 때만 쓴다).
+- 사실 정보가 불확실하면 단정하지 말고 확인이 필요하다고 적는다.
+${cfg.guide ? '추가 지시:\n' + cfg.guide : ''}
+${text ? '\n메모:\n' + text : ''}`;
+}
+/* AI 의견은 사용자가 "AI 의견 듣기"를 눌렀을 때만 따로 받는다 — 정리 결과(받아쓰기·핵심)만 먼저 보고,
+   의견이 필요할 때만 읽고 싶다는 요청. 첫 정리도 그만큼 빨라진다 */
+function buildOpinionPrompt(r){
+  return `너는 작가 '누에마'의 아이디어 메모 정리 도우미다. 누에마는 사물을 의인화한 짧은 산문시를 쓰고 유튜브 쇼츠 채널 '마음 배달부'를 운영하며, 배송 관리 일을 하면서 틈틈이 떠오른 생각을 짧게 메모한다.
+아래는 누에마의 메모(받아쓰기)와 거기서 뽑은 핵심이다. 이 메모에 대한 너의 의견을 써라.
+
+반드시 아래 JSON 하나만 출력한다. 마크다운이나 설명 문장은 쓰지 않는다.
+{
   "check": {
     "good": ["살릴 만한 지점 1~2개, 근거와 함께"],
     "weak": ["모호하거나 비어 있는 부분 1~3개"],
     "questions": ["더 생각해볼 질문 1~3개"]
   },
   "extend": ["원문에 없는, AI가 덧붙이는 발전 방향 2~3개"],
-  "draft": "category가 글감이면 3~6줄짜리 산문시 초안, 아니면 빈 문자열"
+  "draft": "분류가 글감이면 3~6줄짜리 산문시 초안, 아니면 빈 문자열"
 }
 
 규칙:
-- points에는 원문에 없는 내용을 넣지 않는다. AI의 생각은 check, extend, draft에만 넣는다.
 - 사실 정보가 불확실하면 단정하지 말고 확인이 필요하다고 적는다.
 ${cfg.guide ? '추가 지시:\n' + cfg.guide : ''}
-${text ? '\n메모:\n' + text : ''}`;
+
+분류: ${r.category || '기타'}
+제목: ${r.title || ''}
+메모:
+${r.transcript || ''}
+핵심:
+${arr(r.points).map(x => '- ' + x).join('\n')}`;
 }
 function parseJSON(t){
   const clean = t.replace(/```json|```/g, '').trim();
@@ -427,6 +451,44 @@ function parseJSON(t){
     if (a >= 0 && b > a) return JSON.parse(clean.slice(a, b + 1));
     throw new Error('AI 응답을 읽지 못했습니다');
   }
+}
+/* Gemini 에 parts 를 보내 JSON 응답을 받는다. 고른 모델 → (켜져 있으면) 예비 모델 순으로 시도. 키 오류(400/403) 같은 건 바로 멈춘다 */
+async function geminiJSON(parts){
+  const body = JSON.stringify({contents:[{role:'user', parts}], generationConfig:{responseMimeType:'application/json', temperature:0.6}});
+  const chain = [cfg.model, ...(cfg.fallback === false ? [] : FALLBACK.filter(x => x !== cfg.model).slice(0, 2))];
+  let d = null, used = null, lastErr = null;
+  for (const model of chain){
+    // 키는 URL이 아니라 헤더로 보낸다 (히스토리·프록시 로그에 남지 않게)
+    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`, {
+      method:'POST', headers:{'Content-Type':'application/json', 'x-goog-api-key': cfg.key}, body
+    });
+    if (res.ok){ d = await res.json(); used = model; break; }
+    const t = await res.text();
+    let msg = t; try{ msg = JSON.parse(t).error.message; }catch(e){}
+    lastErr = new Error(`Gemini 오류 ${res.status} (${model}): ${String(msg).slice(0, 140)}`);
+    if (![404, 429, 500, 503].includes(res.status)) throw lastErr;
+  }
+  if (!d) throw lastErr;
+  const txt = ((d.candidates && d.candidates[0] && d.candidates[0].content && d.candidates[0].content.parts) || []).map(p => p.text || '').join('');
+  if (!txt) throw new Error('AI가 빈 응답을 보냈습니다. 다시 정리해 보세요');
+  return {json: parseJSON(txt), used};
+}
+/* AI 의견 받기 — 받아쓰기·핵심을 글로 보내 check/extend/draft 만 받아 메모에 덧붙인다 */
+const hasOpinion = r => !!(r && r.check);
+async function requestOpinion(id){
+  const m = memos.find(x => x.id === id); if (!m || m.status !== 'done' || !m.r) return;
+  if (!cfg.key){ toast('설정에서 Gemini API 키를 입력하세요'); return openSettings(); }
+  if (m.opinionWorking) return;
+  m.opinionWorking = true; if (openId === id) openDetail(id);
+  try{
+    const {json} = await geminiJSON([{text: buildOpinionPrompt(m.r)}]);
+    m.r.check = json.check || {good:[], weak:[], questions:[]};
+    m.r.extend = arr(json.extend); m.r.draft = typeof json.draft === 'string' ? json.draft : '';
+    saveMemos();
+    if (cfg.gdocAuto !== false && gdocReady()) scheduleDocSync(m);
+  }catch(e){ toast('AI 의견을 받지 못했습니다 — ' + (e.message || e)); }
+  m.opinionWorking = false;
+  if (openId === id) openDetail(id, true);
 }
 async function processMemo(id){
   const m = memos.find(x => x.id === id); if (!m) return;
@@ -446,25 +508,8 @@ async function processMemo(id){
     } else {
       parts = [{text: buildPrompt(m.text)}];
     }
-    const body = JSON.stringify({contents:[{role:'user', parts}], generationConfig:{responseMimeType:'application/json', temperature:0.6}});
-    // 고른 모델 → (켜져 있으면) 예비 모델 순으로 시도. 키 오류(400/403) 같은 건 바로 멈춘다
-    const chain = [cfg.model, ...(cfg.fallback === false ? [] : FALLBACK.filter(x => x !== cfg.model).slice(0, 2))];
-    let d = null, used = null, lastErr = null;
-    for (const model of chain){
-      // 키는 URL이 아니라 헤더로 보낸다 (히스토리·프록시 로그에 남지 않게)
-      const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`, {
-        method:'POST', headers:{'Content-Type':'application/json', 'x-goog-api-key': cfg.key}, body
-      });
-      if (res.ok){ d = await res.json(); used = model; break; }
-      const t = await res.text();
-      let msg = t; try{ msg = JSON.parse(t).error.message; }catch(e){}
-      lastErr = new Error(`Gemini 오류 ${res.status} (${model}): ${String(msg).slice(0, 140)}`);
-      if (![404, 429, 500, 503].includes(res.status)) throw lastErr;
-    }
-    if (!d) throw lastErr;
-    const txt = ((d.candidates && d.candidates[0] && d.candidates[0].content && d.candidates[0].content.parts) || []).map(p => p.text || '').join('');
-    if (!txt) throw new Error('AI가 빈 응답을 보냈습니다. 다시 정리해 보세요');
-    m.r = parseJSON(txt);
+    const {json, used} = await geminiJSON(parts);
+    m.r = json;
     if (!CATS.some(c => c.k === m.r.category)) m.r.category = '기타';
     m.model = used;
     m.status = 'done';
@@ -528,8 +573,16 @@ function render(){ renderFilters(); renderList(); }
 
 /* ---------- 시트 ---------- */
 let audioUrl = null, sheetOpener = null;
+/* 폰의 뒤로가기(안드로이드 뒤로 버튼·제스처)로 시트를 닫는다.
+   시트를 열 때 히스토리를 한 칸 넣어 두고, 뒤로가기(popstate)가 오면 시트를 닫는다.
+   화면의 닫기 버튼으로 닫을 때는 넣어 둔 한 칸을 history.back() 으로 걷어내 뒤로가기가 한 번 더 눌리는 일이 없게 한다 */
+let sheetHist = false;
+window.addEventListener('popstate', () => {
+  if ($('#sheet').classList.contains('open')){ sheetHist = false; closeSheet(); }
+});
 function showSheet(html){
   const sheet = $('#sheet'), wasOpen = sheet.classList.contains('open');
+  if (!wasOpen){ try{ history.pushState({nuemaSheet:true}, ''); sheetHist = true; }catch(e){} }
   $('#sheetBody').innerHTML = html;
   // 시트 제목을 대화상자 이름으로 쓰고, 열릴 때 포커스를 시트로 옮긴다 (스크린리더·키보드용)
   const h2 = $('#sheetBody h2');
@@ -546,6 +599,7 @@ function closeSheet(){
   if (audioUrl){ URL.revokeObjectURL(audioUrl); audioUrl = null; }
   if (sheetOpener && sheetOpener.focus && document.contains(sheetOpener)) sheetOpener.focus({preventScroll:true});
   sheetOpener = null;
+  if (sheetHist){ sheetHist = false; try{ history.back(); }catch(e){} }
 }
 $('#sheetBg').onclick = closeSheet;
 document.addEventListener('keydown', e => { if (e.key === 'Escape') closeSheet(); });
@@ -577,7 +631,7 @@ window.addEventListener('pagehide', commitDelete);
 
 const ul = a => arr(a).length ? `<ul>${arr(a).map(x => `<li>${esc(x)}</li>`).join('')}</ul>` : '<p class="hint">없음</p>';
 
-async function openDetail(id){
+async function openDetail(id, showOpinion){
   const m = memos.find(x => x.id === id); if (!m) return;
   openId = id;
   const r = m.r || {};
@@ -594,14 +648,18 @@ async function openDetail(id){
       <h3>내가 한 말</h3>
       <p class="transcript">${esc(r.transcript || m.text)}</p>
       <h3>핵심</h3>${ul(r.points)}
-      <div class="ai-block">
+      ${m.opinionWorking ? `<p class="ai-wait">AI가 의견을 쓰는 중…</p>`
+        : hasOpinion(r) ? `<button class="link-btn ai-toggle" data-act="opinion" aria-expanded="${showOpinion ? 'true' : 'false'}">${showOpinion ? 'AI 의견 접기 ▴' : 'AI 의견 보기 ▾'}</button>`
+        : `<button class="link-btn ai-toggle" data-act="askopinion">AI 의견 듣기 →</button>`}
+      ${hasOpinion(r) ? `<div class="ai-block" id="aiBlock" ${showOpinion ? '' : 'hidden'}>
         <p class="ai-note">여기부터는 AI 의견입니다</p>
         <h4>살릴 점</h4>${ul(c.good)}
         <h4>비어 있는 곳</h4>${ul(c.weak)}
         <h4>생각해볼 질문</h4>${ul(c.questions)}
         <h4>덧붙인 방향</h4>${ul(r.extend)}
         ${r.draft ? `<h4>초안</h4><p class="draft">${esc(r.draft)}</p>` : ''}
-      </div>`;
+        <button class="link-btn" data-act="redoopinion">의견 다시 받기</button>
+      </div>` : ''}`;
   } else if (m.status === 'error'){
     body = `<h2>정리하지 못했습니다</h2><p class="state-err">${esc(m.err)}</p><div id="audioSlot"></div>
       ${m.text ? `<p class="transcript">${esc(m.text)}</p>` : ''}`;
@@ -642,6 +700,14 @@ $('#sheetBody').onclick = e => {
   const act = b.dataset.act;
   if (act === 'close') return closeSheet();
   if (act === 'redo') return processMemo(id);
+  if (act === 'askopinion' || act === 'redoopinion') return requestOpinion(id);
+  if (act === 'opinion'){   // 보기/접기 — 시트를 다시 그리지 않아 재생 중인 오디오가 안 끊긴다
+    const blk = $('#aiBlock'); if (!blk) return;
+    const open = blk.hidden; blk.hidden = !open;
+    b.setAttribute('aria-expanded', open ? 'true' : 'false'); b.textContent = open ? 'AI 의견 접기 ▴' : 'AI 의견 보기 ▾';
+    if (open) blk.scrollIntoView({block:'nearest', behavior:'smooth'});
+    return;
+  }
   if (act === 'copy') return copyMemo(m);
   if (act === 'ppt') return makeDeck([m], (m.r.title || '메모').slice(0, 30));
   if (act === 'del') return deleteMemo(id);
@@ -677,7 +743,8 @@ function editTitle(m){
 function copyMemo(m){
   const r = m.r, c = r.check || {};
   const li = a => arr(a).map(x => '- ' + x).join('\n') || '- 없음';
-  const md = `# ${r.title}\n${r.category} | ${fmtDate(m.created)}\n\n## 내가 한 말\n${r.transcript || m.text}\n\n## 핵심\n${li(r.points)}\n\n## AI 체크\n살릴 점\n${li(c.good)}\n비어 있는 곳\n${li(c.weak)}\n생각해볼 질문\n${li(c.questions)}\n\n## 덧붙인 방향 (AI)\n${li(r.extend)}${r.draft ? '\n\n## 초안 (AI)\n' + r.draft : ''}`;
+  const ai = hasOpinion(r) ? `\n\n## AI 체크\n살릴 점\n${li(c.good)}\n비어 있는 곳\n${li(c.weak)}\n생각해볼 질문\n${li(c.questions)}\n\n## 덧붙인 방향 (AI)\n${li(r.extend)}${r.draft ? '\n\n## 초안 (AI)\n' + r.draft : ''}` : '';
+  const md = `# ${r.title}\n${r.category} | ${fmtDate(m.created)}\n\n## 내가 한 말\n${r.transcript || m.text}\n\n## 핵심\n${li(r.points)}${ai}`;
   copyText(md).then(ok => toast(ok ? '복사했습니다' : '복사에 실패했습니다. 길게 눌러 직접 복사해 주세요'));
 }
 
@@ -936,6 +1003,7 @@ async function makeDeck(list, name){
     s = P.addSlide(); head(s, '핵심', arr(r.tags).join('   '), col);
     s.addText(bullets(r.points, SILK), {x:0.72, y:1.4, w:8.6, h:3.8, fontFace:F, fontSize:20, valign:'top', paraSpaceAfter:10});
 
+    if (hasOpinion(r)){   // AI 의견을 받은 메모만 의견 슬라이드를 넣는다
     s = P.addSlide(); head(s, 'AI 체크', 'AI 의견', AI);
     const cols = [['살릴 점', c.good], ['비어 있는 곳', c.weak], ['생각해볼 질문', c.questions]];
     cols.forEach(([t, a], i) => {
@@ -951,6 +1019,7 @@ async function makeDeck(list, name){
       s.addText(String(r.draft), {x:5.4, y:1.55, w:3.9, h:3.5, fontFace:F, fontSize:14, color:SILK, valign:'top', fit:'shrink', lineSpacingMultiple:1.4});
     } else {
       s.addText(bullets(r.extend, SILK), {x:0.72, y:1.4, w:8.6, h:3.8, fontFace:F, fontSize:18, valign:'top', paraSpaceAfter:10});
+    }
     }
   } else {
     let s = P.addSlide(); s.background = {color: BG};
