@@ -160,6 +160,27 @@ a.model-tag{color:var(--ai);text-decoration:none}
 .title-row .link-btn{flex:none;padding:4px 0;font-size:.78rem}
 .title-edit{width:100%;font-family:var(--serif);font-size:1.5rem;background:none;border:none;border-bottom:1px solid var(--ink);border-radius:0;padding:6px 0;color:var(--ink);margin:6px 0}
 .title-edit:focus{outline:none}
+/* 다시 볼 메모 — 종이 위에 놓인 쪽지 몇 장. 왼쪽 가는 선은 분류 색 */
+.review{border-top:1px solid var(--line);padding:0 0 22px}
+.review-head{display:flex;align-items:baseline;justify-content:space-between;padding:14px 0 0}
+.review-head span{font-size:.74rem;color:var(--ink-3);letter-spacing:.14em}
+.review-head .link-btn{font-size:.76rem;padding:4px 0}
+.rv-card{border-left:1px solid var(--moss);padding:0 0 0 16px;margin-top:16px}
+.rv-open{display:block;width:100%;text-align:left;background:none;border:none;padding:2px 0}
+.rv-title{font-family:var(--serif);font-size:1.05rem;margin:4px 0 2px;line-height:1.5}
+.rv-acts{display:flex;gap:24px;margin-top:2px}
+.rv-acts button{background:none;border:none;padding:6px 0;font-size:.84rem;color:var(--ink-2);letter-spacing:.06em}
+.rv-acts .keep{color:var(--ink);font-weight:500}
+.rv-acts .drop{color:var(--shu)}
+.chip-sep{flex:none;width:1px;background:var(--line);margin:14px 6px 12px}
+/* 이어서 한 말 — 처음 메모 아래로 가는 선을 따라 쌓인다 */
+.add-item{margin-top:18px;padding-left:16px;border-left:1px solid var(--line-2)}
+.add-item .transcript{margin-top:4px}
+.add-item .link-btn{padding:4px 0;font-size:.78rem;margin-right:14px}
+.add-item audio{margin-top:8px}
+.add-row{display:flex;flex-wrap:wrap;gap:4px 22px;margin-top:20px}
+.add-row .link-btn{padding-left:0}
+.add-row .btn.primary::before{content:"■";font-size:.7rem;color:var(--shu)}
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 </style>
 </head>
@@ -185,6 +206,7 @@ a.model-tag{color:var(--ai);text-decoration:none}
     <div class="sub-actions"><button class="link-btn" id="btnText">글로 적기</button></div>
   </section>
 
+  <section class="review" id="review" aria-label="다시 볼 메모" hidden></section>
   <div class="filters" id="filters"></div>
   <div class="toolbar">
     <input id="search" type="search" placeholder="메모 검색">
@@ -206,6 +228,12 @@ const CATS = [
   {k:'업무', c:'#B0825C'}, {k:'기타', c:'#A39E92'}
 ];
 const catColor = k => (CATS.find(c => c.k === k) || CATS[4]).c;
+/* 메모의 자람 단계. 좋은 씨앗이 꼭 나무가 될 필요는 없다 — 점수가 아니라 지금 상태 표시 */
+const STAGES = [
+  {k:'seed', n:'씨앗', i:'🌱'}, {k:'sprout', n:'새싹', i:'🌿'}, {k:'tree', n:'나무', i:'🌳'}
+];
+const stageOf = m => STAGES.find(s => s.k === m.stage) || STAGES[0];
+const DAY = 86400000;
 const DEFAULT_GUIDE =
 `- 글감 체크: 사물은 사물로 두고, 교훈이나 감정을 직접 말하는 방향은 피하게 도와줘.
 - 칭찬은 근거가 있는 만큼만. 과장하지 말고 약한 부분을 분명히 짚어줘.
@@ -281,8 +309,21 @@ function toast(msg, action){
 // 앱이 닫혀 '정리 중'으로 멈춘 메모는 다시 시도할 수 있게 표시 (시작 시·백업 가져오기 시 공통)
 function normalizeMemo(m){
   if (m.status === 'working' || m.status === 'pending'){ m.status = 'error'; m.err = '정리가 중단됐습니다. 다시 정리해 주세요'; }
+  arr(m.adds).forEach(a => { if (a.status === 'working' || a.status === 'pending'){ a.status = 'error'; a.err = '받아쓰기가 중단됐습니다. 다시 받아써 주세요'; } });
   return m;
 }
+function relTime(ts){
+  const d = Math.floor((Date.now() - ts) / DAY);
+  if (d < 1) return '오늘';
+  if (d < 7) return d + '일 전';
+  if (d < 30) return Math.floor(d / 7) + '주 전';
+  if (d < 365) return Math.floor(d / 30) + '달 전';
+  return Math.floor(d / 365) + '년 전';
+}
+/* 이어서 한 말: 받아쓰기가 끝난 것만 글로 이어 붙인다 (프롬프트·복사·독스·검색 공통) */
+const doneAdds = m => arr(m.adds).filter(a => a.status === 'done' && a.text);
+const addsText = (m, except) => doneAdds(m).filter(a => a !== except).map(a => `(${fmtDate(a.at)} 이어서) ${a.text}`).join('\n\n');
+const fullText = m => [(m.r && m.r.transcript) || m.text || '', addsText(m)].filter(Boolean).join('\n\n');
 async function copyText(text){
   try{ if (navigator.clipboard && navigator.clipboard.writeText){ await navigator.clipboard.writeText(text); return true; } }catch(e){}
   // file:// 나 http 처럼 clipboard API가 없는 환경용 대체 경로
@@ -325,7 +366,8 @@ async function toWav16k(blob){
 }
 
 /* ---------- 녹음 ---------- */
-let rec = null, chunks = [], startAt = 0, tick = null, stream = null, wakeLock = null;
+/* cur: 지금 녹음 한 건의 조각·시작 시각·대상. target 이 있으면 새 메모가 아니라 그 메모에 "이어서 말하기" */
+let rec = null, cur = null, tick = null, stream = null, wakeLock = null;
 const IDLE_MSG = '떠오른 걸 바로 말해 두세요 (최대 5분)';
 const isRecording = () => !!(rec && rec.state === 'recording');
 const ring = $('#ring'), CIRC = 2 * Math.PI * 84;
@@ -342,35 +384,39 @@ function releaseWake(){ if (wakeLock){ wakeLock.release().catch(() => {}); wakeL
 // 다른 앱에 갔다 돌아오면 wake lock이 풀려 있으므로 녹음 중이면 다시 잡는다
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && isRecording()) holdWake(); });
 
-async function startRec(){
+async function startRec(target){
+  if (isRecording()) return;
   if (!navigator.mediaDevices || !window.MediaRecorder){ toast('이 브라우저는 녹음을 지원하지 않습니다'); return; }
   try{
     stream = await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true, noiseSuppression:true}});
   }catch(e){ toast('마이크 권한을 허용해야 녹음할 수 있습니다'); return; }
-  chunks = [];
-  rec = new MediaRecorder(stream);
-  rec.ondataavailable = e => e.data.size && chunks.push(e.data);
-  rec.onstop = onRecStop;
+  // 녹음 한 건마다 따로 담아 두어, 멈춘 직후 바로 새 녹음을 시작해도 조각이 섞이지 않게 한다
+  const my = cur = {chunks:[], startAt:Date.now(), target: target || null};
+  const r = rec = new MediaRecorder(stream);
+  r.ondataavailable = e => e.data.size && my.chunks.push(e.data);
+  r.onstop = () => onRecStop(my, r.mimeType || 'audio/webm');
   rec.onerror = () => { if (isRecording()){ stopRec(); toast('녹음 중 오류가 나서 멈췄습니다. 지금까지 녹음은 저장합니다'); } };
   // 전화 수신·앱 전환 등으로 마이크가 끊기면 조용히 실패하지 않고 바로 멈추고 알린다
   stream.getTracks().forEach(t => t.onended = () => { if (isRecording()){ stopRec(); toast('마이크 연결이 끊겨 녹음을 멈췄습니다'); } });
   rec.start(1000);
-  startAt = Date.now();
   $('#recZone').classList.add('recording');
   $('#recLabel').textContent = '멈추기';
   $('#recBtn').setAttribute('aria-label', '녹음 멈추기');
   tick = setInterval(updateTimer, 250); updateTimer();
   holdWake();
+  if (my.target && openId === my.target) openDetail(my.target);   // 시트의 버튼을 "멈추기"로
 }
 function updateTimer(){
-  const s = (Date.now() - startAt) / 1000;
+  const s = (Date.now() - cur.startAt) / 1000;
   ring.style.strokeDashoffset = CIRC * (1 - Math.min(s / MAX_SEC, 1));
-  const m = Math.floor(s / 60), ss = String(Math.floor(s % 60)).padStart(2, '0');
-  $('#timer').textContent = `녹음 중 ${m}:${ss} / 5:00`;
+  const t = `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
+  $('#timer').textContent = `${cur.target ? '이어서 말하는 중' : '녹음 중'} ${t} / 5:00`;
+  const at = $('#addTimer'); if (at) at.textContent = t;
   if (s >= MAX_SEC) stopRec();
 }
 function stopRec(){
   if (!isRecording()) return;
+  cur.endAt = Date.now();
   rec.stop();
   stream.getTracks().forEach(t => { t.onended = null; t.stop(); });
   clearInterval(tick);
@@ -382,11 +428,15 @@ function stopRec(){
 }
 // 새 녹음이 이미 시작됐으면 타이머 문구를 건드리지 않는다
 function setIdleMsg(msg){ if (!isRecording()) $('#timer').textContent = msg; }
-async function onRecStop(){
-  const dur = (Date.now() - startAt) / 1000;
-  const mime = rec.mimeType || 'audio/webm';
-  if (dur < 1.2){ setIdleMsg('너무 짧아서 저장하지 않았습니다'); return; }
-  const blob = new Blob(chunks, {type: mime});
+async function onRecStop(my, mime){
+  const dur = ((my.endAt || Date.now()) - my.startAt) / 1000;
+  if (dur < 1.2){
+    setIdleMsg('너무 짧아서 저장하지 않았습니다');
+    if (my.target && openId === my.target) openDetail(my.target);
+    return;
+  }
+  const blob = new Blob(my.chunks, {type: mime});
+  if (my.target) return saveAddVoice(my.target, blob, dur);
   const id = 'm' + Date.now();
   try{ await idb.put(id, blob); }catch(e){ toast('녹음 저장에 실패했습니다'); return; }
   memos.unshift({id, kind:'voice', created:Date.now(), dur:Math.round(dur), status:'pending'});
@@ -397,8 +447,11 @@ async function onRecStop(){
 }
 
 /* ---------- Gemini 정리 ---------- */
-function buildPrompt(text){
-  return `너는 작가 '누에마'의 아이디어 메모 정리 도우미다. 누에마는 사물을 의인화한 짧은 산문시를 쓰고 유튜브 쇼츠 채널 '마음 배달부'를 운영하며, 배송 관리 일을 하면서 틈틈이 떠오른 생각을 짧게 메모한다.
+const PERSONA = `너는 작가 '누에마'의 아이디어 메모 정리 도우미다. 누에마는 사물을 의인화한 짧은 산문시를 쓰고 유튜브 쇼츠 채널 '마음 배달부'를 운영하며, 배송 관리 일을 하면서 틈틈이 떠오른 생각을 짧게 메모한다.`;
+/* m 에 이어서 한 말이 있으면 다시 정리할 때 핵심·태그가 그것까지 담도록 함께 보낸다 */
+function buildPrompt(text, m){
+  const more = m ? addsText(m) : '';
+  return `${PERSONA}
 ${text ? '아래 글 메모를' : '첨부된 음성 메모를 듣고'} 정리해라.
 
 반드시 아래 JSON 하나만 출력한다. 마크다운이나 설명 문장은 쓰지 않는다.
@@ -413,13 +466,37 @@ ${text ? '아래 글 메모를' : '첨부된 음성 메모를 듣고'} 정리해
 규칙:
 - points에는 원문에 없는 내용을 넣지 않는다. 너의 의견·제안은 넣지 않는다 (의견은 따로 요청받을 때만 쓴다).
 - 사실 정보가 불확실하면 단정하지 말고 확인이 필요하다고 적는다.
+${more ? '- 이 메모에는 나중에 이어서 덧붙인 말이 있다. transcript는 처음 메모만 받아쓰고, points·tags는 덧붙인 말까지 전체를 보고 뽑는다. 생각이 처음과 달라졌으면 달라진 쪽을 반영한다.\n' : ''}${cfg.guide ? '추가 지시:\n' + cfg.guide : ''}
+${text ? '\n메모:\n' + text : ''}${more ? '\n\n이어서 덧붙인 말:\n' + more : ''}`;
+}
+/* 이어서 한 말 한 건을 받아쓰고, 처음 메모와 합쳐 핵심·태그를 새로 뽑는다 (제목·분류는 그대로 둔다) */
+function buildAddPrompt(m, a){
+  const r = m.r || {}, prev = addsText(m, a), voice = a.kind === 'voice';
+  return `${PERSONA}
+누에마가 예전에 남긴 메모에 생각을 이어서 덧붙였다. ${voice ? '첨부된 음성(이번에 덧붙인 말)을 듣고' : '아래 "이번에 덧붙인 글"을 읽고'} 정리해라.
+
+반드시 아래 JSON 하나만 출력한다. 마크다운이나 설명 문장은 쓰지 않는다.
+{
+  "transcript": "${voice ? '이번에 덧붙인 말만 그대로 받아쓰기. 음, 어 같은 군말만 빼고 내용은 더하지도 빼지도 않는다' : '이번에 덧붙인 글을 그대로'}",
+  "points": ["처음 메모와 덧붙인 말 전체에서, 원문에 실제로 있는 핵심 2~6개"],
+  "tags": ["전체를 보고 키워드 2~5개"]
+}
+
+규칙:
+- points에는 원문에 없는 내용을 넣지 않는다. 너의 의견·제안은 넣지 않는다.
+- 생각이 처음과 달라졌으면 달라진 쪽을 핵심에 반영한다.
 ${cfg.guide ? '추가 지시:\n' + cfg.guide : ''}
-${text ? '\n메모:\n' + text : ''}`;
+
+제목: ${r.title || ''}
+처음 메모 (${fmtDate(m.created)}):
+${r.transcript || m.text || ''}
+${prev ? '\n앞서 덧붙인 말:\n' + prev + '\n' : ''}${voice ? '' : '\n이번에 덧붙인 글:\n' + a.src}`;
 }
 /* AI 의견은 사용자가 "AI 의견 듣기"를 눌렀을 때만 따로 받는다 — 정리 결과(받아쓰기·핵심)만 먼저 보고,
    의견이 필요할 때만 읽고 싶다는 요청. 첫 정리도 그만큼 빨라진다 */
-function buildOpinionPrompt(r){
-  return `너는 작가 '누에마'의 아이디어 메모 정리 도우미다. 누에마는 사물을 의인화한 짧은 산문시를 쓰고 유튜브 쇼츠 채널 '마음 배달부'를 운영하며, 배송 관리 일을 하면서 틈틈이 떠오른 생각을 짧게 메모한다.
+function buildOpinionPrompt(m){
+  const r = m.r, more = addsText(m);
+  return `${PERSONA}
 아래는 누에마의 메모(받아쓰기)와 거기서 뽑은 핵심이다. 이 메모에 대한 너의 의견을 써라.
 
 반드시 아래 JSON 하나만 출력한다. 마크다운이나 설명 문장은 쓰지 않는다.
@@ -441,7 +518,7 @@ ${cfg.guide ? '추가 지시:\n' + cfg.guide : ''}
 제목: ${r.title || ''}
 메모:
 ${r.transcript || ''}
-핵심:
+${more ? '이어서 덧붙인 말:\n' + more + '\n' : ''}핵심:
 ${arr(r.points).map(x => '- ' + x).join('\n')}`;
 }
 function parseJSON(t){
@@ -481,7 +558,7 @@ async function requestOpinion(id){
   if (m.opinionWorking) return;
   m.opinionWorking = true; if (openId === id) openDetail(id);
   try{
-    const {json} = await geminiJSON([{text: buildOpinionPrompt(m.r)}]);
+    const {json} = await geminiJSON([{text: buildOpinionPrompt(m)}]);
     m.r.check = json.check || {good:[], weak:[], questions:[]};
     m.r.extend = arr(json.extend); m.r.draft = typeof json.draft === 'string' ? json.draft : '';
     saveMemos();
@@ -501,12 +578,9 @@ async function processMemo(id){
     if (m.kind === 'voice'){
       const blob = await idb.get(id);
       if (!blob) throw new Error('녹음 파일이 이 기기에 없습니다');
-      let audio;
-      try{ const wav = await toWav16k(blob); audio = {inline_data:{mime_type:'audio/wav', data: await toB64(wav)}}; }
-      catch(e){ audio = {inline_data:{mime_type:(blob.type || 'audio/webm').split(';')[0], data: await toB64(blob)}}; }
-      parts = [audio, {text: buildPrompt('')}];
+      parts = [await audioPart(blob), {text: buildPrompt('', m)}];
     } else {
-      parts = [{text: buildPrompt(m.text)}];
+      parts = [{text: buildPrompt(m.text, m)}];
     }
     const {json, used} = await geminiJSON(parts);
     m.r = json;
@@ -524,24 +598,172 @@ async function processMemo(id){
   if (m.status === 'error') toast(m.err);
   if (m.status === 'done' && cfg.gdocAuto !== false && gdocReady()) sendToDocs(m, true);
 }
+async function audioPart(blob){
+  try{ const wav = await toWav16k(blob); return {inline_data:{mime_type:'audio/wav', data: await toB64(wav)}}; }
+  catch(e){ return {inline_data:{mime_type:(blob.type || 'audio/webm').split(';')[0], data: await toB64(blob)}}; }
+}
+
+/* ---------- 이어서 말하기·적기 ----------
+   예전 메모에 생각을 덧붙여 조금씩 키운다. 덧붙인 말은 m.adds 에 쌓이고, 녹음은 IndexedDB 에 add id 로 보관.
+   덧붙이면 씨앗이 새싹으로 자라고, 3일 뒤 다시 보기에 올라온다 */
+async function saveAddVoice(id, blob, dur){
+  const m = memos.find(x => x.id === id);
+  if (!m){ toast('메모가 지워져 덧붙이지 못했습니다'); setIdleMsg(IDLE_MSG); return; }
+  const aid = 'a' + Date.now();
+  try{ await idb.put(aid, blob); }catch(e){ toast('녹음 저장에 실패했습니다'); setIdleMsg(IDLE_MSG); return; }
+  m.adds = arr(m.adds); m.adds.push({id:aid, kind:'voice', at:Date.now(), dur:Math.round(dur), status:'pending'});
+  saveMemos(); render();
+  setIdleMsg('덧붙였습니다. 받아쓰는 중…');
+  await processAdd(id, aid);
+  setIdleMsg(IDLE_MSG);
+}
+let addFor = null;   // "이어서 적기" 입력 중인 메모 id
+function openAddText(id){
+  const m = memos.find(x => x.id === id); if (!m) return;
+  // 입력하는 동안 다른 작업이 끝나 시트를 다시 그리면 적던 글이 사라지므로 openId 를 비워 둔다
+  addFor = id; openId = null; freeAudio();
+  showSheet(`
+    <h2>이어서 적기</h2>
+    <p class="hint">${esc((m.r && m.r.title) || '메모')} · ${relTime(m.created)}에 남긴 메모에 덧붙입니다</p>
+    <textarea id="addText" placeholder="그 뒤로 떠오른 생각"></textarea>
+    <div class="actions"><button class="btn primary" data-act="saveadd">덧붙이기</button><button class="btn" data-act="canceladd">돌아가기</button></div>`);
+  $('#addText').focus();
+}
+function saveAddText(){
+  const id = addFor, m = memos.find(x => x.id === id), t = ($('#addText') || {}).value || '';
+  if (!m) return closeSheet();
+  if (!t.trim()){ toast('내용을 입력하세요'); return; }
+  const aid = 'a' + Date.now();
+  m.adds = arr(m.adds); m.adds.push({id:aid, kind:'text', at:Date.now(), src:t.trim(), status:'pending'});
+  saveMemos(); addFor = null;
+  openDetail(id);
+  processAdd(id, aid);
+}
+async function processAdd(id, aid){
+  const m = memos.find(x => x.id === id), a = m && arr(m.adds).find(x => x.id === aid);
+  if (!a) return;
+  if (!cfg.key){ a.status = 'error'; a.err = '설정에서 Gemini API 키를 입력하세요'; saveMemos(); if (openId === id) openDetail(id); return; }
+  a.status = 'working'; a.err = ''; saveMemos(); render(); if (openId === id) openDetail(id);
+  try{
+    let parts;
+    if (a.kind === 'voice'){
+      const blob = await idb.get(aid);
+      if (!blob) throw new Error('녹음 파일이 이 기기에 없습니다');
+      parts = [await audioPart(blob), {text: buildAddPrompt(m, a)}];
+    } else parts = [{text: buildAddPrompt(m, a)}];
+    const {json} = await geminiJSON(parts);
+    a.text = a.kind === 'text' ? a.src : String(json.transcript || '').trim();
+    if (!a.text) throw new Error('받아쓴 내용이 비어 있습니다');
+    a.status = 'done';
+    if (m.r){
+      if (arr(json.points).length) m.r.points = arr(json.points);
+      if (arr(json.tags).length) m.r.tags = arr(json.tags);
+    }
+    if (!m.stage || m.stage === 'seed') m.stage = 'sprout';
+    m.next = Date.now() + 3 * DAY;
+  }catch(e){
+    a.status = 'error'; a.err = e.message || String(e);
+    toast('덧붙인 말을 정리하지 못했습니다 — ' + a.err);
+  }
+  saveMemos(); render();
+  if (openId === id) openDetail(id);
+  if (a.status === 'done' && m.gdoc && cfg.gdocAuto !== false && gdocReady()) sendToDocs(m, true);
+}
+function deleteAdd(m, aid){
+  const a = m && arr(m.adds).find(x => x.id === aid); if (!a) return;
+  if (!confirm('이어서 한 말 하나를 지울까요?\n핵심은 그대로 남습니다. 핵심도 맞추려면 지운 뒤 "다시 정리"를 누르세요.')) return;
+  if (a.kind === 'voice') idb.del(aid).catch(() => {});
+  m.adds = arr(m.adds).filter(x => x !== a);
+  saveMemos(); render(); openDetail(m.id); scheduleDocSync(m);
+}
+/* 보관: 목록·다시 보기에서 빼 두기만 한다. 지우지 않으므로 "보관" 필터에서 언제든 꺼낼 수 있다 */
+function archiveMemo(id, on){
+  const m = memos.find(x => x.id === id); if (!m) return;
+  if (on) m.archived = true; else delete m.archived;
+  saveMemos(); render();
+  if (openId === id) openDetail(id);
+  if (on) toast('보관함으로 옮겼습니다', {label:'되돌리기', fn(){ archiveMemo(id, false); }});
+  else toast('보관을 풀었습니다');
+}
+
+/* ---------- 다시 보기: 매일 예전 메모 몇 장을 다시 꺼내 준다 ----------
+   살리기 = 3일 뒤 또 보기, 보류 = 볼 때마다 간격을 두 배로(7일→14일→…최대 60일), 버리기 = 보관함으로.
+   만든 지 하루 넘은 메모부터, 처음에는 3일 뒤에 올라온다. 나무(완성)와 보관한 메모는 빠진다 */
+const REVIEW_MAX = 3;
+function reviewState(){
+  const day = new Date().toDateString(), s = store.get('nuema_review_v1', {});
+  return s.day === day ? s : {day, n:0, skip:false};
+}
+const dueAt = m => m.next || (m.created + 3 * DAY);
+function dueMemos(){
+  const now = Date.now();
+  return memos.filter(m => m.status === 'done' && m.r && !m.archived && m.stage !== 'tree' && now - m.created > DAY && dueAt(m) <= now)
+    .sort((a, b) => dueAt(a) - dueAt(b));
+}
+function renderReview(){
+  const box = $('#review'), s = reviewState();
+  const list = s.skip ? [] : dueMemos().slice(0, Math.max(0, REVIEW_MAX - s.n));
+  box.hidden = !list.length;
+  box.innerHTML = !list.length ? '' : `<div class="review-head"><span>다시 볼 메모</span><button class="link-btn" data-rv="skip">오늘은 그만</button></div>`
+    + list.map(m => `<div class="rv-card" data-id="${m.id}" style="border-left-color:${catColor(m.r.category)}">
+      <button class="rv-open" data-rv="open">
+        <div class="meta">${stageOf(m).i} ${esc(m.r.category)} · ${relTime(m.created)}</div>
+        <div class="rv-title">${esc(m.r.title || '제목 없음')}</div>
+        <div class="item-sub">${esc(arr(m.r.points)[0] || m.r.transcript || '')}</div>
+      </button>
+      <div class="rv-acts"><button class="keep" data-rv="keep">살리기</button><button data-rv="later">보류</button><button class="drop" data-rv="drop">버리기</button></div>
+    </div>`).join('');
+}
+$('#review').onclick = e => {
+  const b = e.target.closest('[data-rv]'); if (!b) return;
+  const act = b.dataset.rv, s = reviewState();
+  if (act === 'skip'){ s.skip = true; store.set('nuema_review_v1', s); renderReview(); toast('내일 다시 꺼내 드릴게요'); return; }
+  const id = b.closest('[data-id]').dataset.id, m = memos.find(x => x.id === id); if (!m) return;
+  if (act === 'open') return openDetail(id);
+  s.n++; store.set('nuema_review_v1', s);
+  if (act === 'drop') return archiveMemo(id, true);
+  if (act === 'keep'){ m.ivl = 3; toast('살렸습니다. 3일 뒤에 다시 보여 드릴게요', {label:'지금 덧붙이기', fn(){ openDetail(id); }}); }
+  else { m.ivl = Math.min(Math.max((m.ivl || 3) * 2, 7), 60); toast(`${m.ivl}일 뒤에 다시 보여 드릴게요`); }
+  m.next = Date.now() + m.ivl * DAY;
+  saveMemos(); render();
+};
+// 날짜가 바뀐 뒤 앱으로 돌아오면 오늘 몫을 새로 꺼낸다
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') renderReview(); });
 
 /* ---------- 목록 ---------- */
+/* 필터 줄: 전체·분류 | 자람 단계(분류와 겹쳐 쓸 수 있음) | 보관(있을 때만) */
+let stageF = null;
 function renderFilters(){
-  const counts = {};
-  memos.forEach(m => { const k = m.r ? m.r.category : null; if (k) counts[k] = (counts[k] || 0) + 1; });
+  const live = memos.filter(m => !m.archived), counts = {}, sc = {};
+  live.forEach(m => {
+    const k = m.r ? m.r.category : null; if (k) counts[k] = (counts[k] || 0) + 1;
+    if (m.status === 'done'){ const s = stageOf(m).k; sc[s] = (sc[s] || 0) + 1; }
+  });
+  const nArch = memos.length - live.length;
+  if (filter === '보관' && !nArch) filter = '전체';
   const keys = ['전체', ...CATS.map(c => c.k)];
   $('#filters').innerHTML = keys.map(k =>
-    `<button class="chip" aria-pressed="${k === filter}" data-k="${k}">${k}${k !== '전체' && counts[k] ? ' ' + counts[k] : ''}</button>`).join('');
+    `<button class="chip" aria-pressed="${k === filter}" data-k="${k}">${k}${k !== '전체' && counts[k] ? ' ' + counts[k] : ''}</button>`).join('')
+    + '<span class="chip-sep"></span>'
+    + STAGES.map(s => `<button class="chip" aria-pressed="${s.k === stageF}" data-s="${s.k}">${s.i} ${s.n}${sc[s.k] ? ' ' + sc[s.k] : ''}</button>`).join('')
+    + (nArch ? `<button class="chip" aria-pressed="${filter === '보관'}" data-k="보관">보관 ${nArch}</button>` : '');
 }
-$('#filters').onclick = e => { const b = e.target.closest('.chip'); if (!b) return; filter = b.dataset.k; render(); };
+$('#filters').onclick = e => {
+  const b = e.target.closest('.chip'); if (!b) return;
+  if (b.dataset.s) stageF = stageF === b.dataset.s ? null : b.dataset.s;   // 같은 단계를 다시 누르면 풀기
+  else filter = b.dataset.k;
+  render();
+};
 $('#search').oninput = () => renderList();
 
 function visibleMemos(){
   const q = $('#search').value.trim().toLowerCase();
   return memos.filter(m => {
-    if (filter !== '전체' && (!m.r || m.r.category !== filter)) return false;
+    if ((filter === '보관') !== !!m.archived) return false;
+    if (filter !== '전체' && filter !== '보관' && (!m.r || m.r.category !== filter)) return false;
+    if (stageF && stageOf(m).k !== stageF) return false;
     if (!q) return true;
-    const hay = [m.text, m.r && m.r.title, m.r && m.r.transcript, m.r && arr(m.r.tags).join(' ')].join(' ').toLowerCase();
+    const hay = [m.text, m.r && m.r.title, m.r && m.r.transcript, m.r && arr(m.r.points).join(' '), m.r && arr(m.r.tags).join(' '), addsText(m)].join(' ').toLowerCase();
     return hay.includes(q);
   });
 }
@@ -555,24 +777,25 @@ function renderList(){
     let title, sub, color = '#A39E92', cat = '';
     if (m.status === 'done' && m.r){
       title = m.r.title || '제목 없음'; sub = arr(m.r.points)[0] || m.r.transcript || '';
-      color = catColor(m.r.category); cat = m.r.category;
+      color = catColor(m.r.category); cat = `${stageOf(m).i} ${m.r.category}`;
     } else if (m.status === 'error'){
       title = '정리 실패'; sub = `<span class="state-err">${esc(m.err)}</span>`;
     } else {
       title = '정리하는 중…'; sub = m.kind === 'voice' ? `${m.dur}초 녹음` : (m.text || '').slice(0, 60);
     }
     return `<li class="item"><button data-id="${m.id}">
-      <div class="meta"><span class="cat-dot" style="background:${color}"></span>${esc(cat)} ${fmtDate(m.created)}${m.kind === 'voice' ? ' 🎙' : ' ✎'}</div>
+      <div class="meta"><span class="cat-dot" style="background:${color}"></span>${esc(cat)} ${fmtDate(m.created)}${m.kind === 'voice' ? ' 🎙' : ' ✎'}${doneAdds(m).length ? ` · 이어서 ${doneAdds(m).length}` : ''}</div>
       <div class="item-title">${esc(title)}</div>
       <div class="item-sub">${m.status === 'error' ? sub : esc(sub)}</div>
     </button></li>`;
   }).join('');
 }
 $('#list').onclick = e => { const b = e.target.closest('button[data-id]'); if (b) openDetail(b.dataset.id); };
-function render(){ renderFilters(); renderList(); }
+function render(){ renderReview(); renderFilters(); renderList(); }
 
 /* ---------- 시트 ---------- */
-let audioUrl = null, sheetOpener = null;
+let audioUrls = [], sheetOpener = null;
+function freeAudio(){ audioUrls.forEach(u => URL.revokeObjectURL(u)); audioUrls = []; }
 /* 폰의 뒤로가기(안드로이드 뒤로 버튼·제스처)로 시트를 닫는다.
    시트를 열 때 히스토리를 한 칸 넣어 두고, 뒤로가기(popstate)가 오면 시트를 닫는다.
    화면의 닫기 버튼으로 닫을 때는 넣어 둔 한 칸을 history.back() 으로 걷어내 뒤로가기가 한 번 더 눌리는 일이 없게 한다 */
@@ -595,8 +818,8 @@ function closeSheet(){
   const sheet = $('#sheet');
   if (!sheet.classList.contains('open')) return;
   sheet.classList.remove('open'); $('#sheetBg').classList.remove('open');
-  openId = null;
-  if (audioUrl){ URL.revokeObjectURL(audioUrl); audioUrl = null; }
+  openId = null; addFor = null;
+  freeAudio();
   if (sheetOpener && sheetOpener.focus && document.contains(sheetOpener)) sheetOpener.focus({preventScroll:true});
   sheetOpener = null;
   if (sheetHist){ sheetHist = false; try{ history.back(); }catch(e){} }
@@ -610,6 +833,7 @@ function commitDelete(){
   if (!pendingDel) return;
   const {m, t} = pendingDel; clearTimeout(t); pendingDel = null;
   if (m.kind === 'voice') idb.del(m.id).catch(() => {});
+  arr(m.adds).forEach(a => { if (a.kind === 'voice') idb.del(a.id).catch(() => {}); });
   if (m.gdoc && gdocReady()) fetch(cfg.gdocUrl, {method:'POST', body: JSON.stringify({action:'delete', id:m.id, created:fmtDate(m.created), kind:m.kind})}).catch(() => {});
 }
 function undoDelete(){
@@ -643,10 +867,17 @@ async function openDetail(id, showOpinion){
       <div class="title-row"><h2 id="detailTitle">${esc(r.title)}</h2><button class="link-btn" data-act="edittitle">제목 고치기</button></div>
       <div class="cat-edit" aria-label="분류 바꾸기">${CATS.map(c =>
         `<button class="chip" data-cat="${c.k}" aria-pressed="${c.k === r.category}">${c.k}</button>`).join('')}</div>
+      <div class="cat-edit" aria-label="자람 단계">${STAGES.map(s =>
+        `<button class="chip" data-stage="${s.k}" aria-pressed="${s.k === stageOf(m).k}">${s.i} ${s.n}</button>`).join('')}</div>
       <div class="tags">${arr(r.tags).map(t => `<span class="tag">${esc(t)}</span>`).join('')}</div>
+      ${m.archived ? '<p class="hint">보관함에 있는 메모입니다. 목록과 다시 보기에는 나오지 않습니다.</p>' : ''}
       <div id="audioSlot">${m.noAudio ? '<p class="hint">녹음 원본은 지웠고 받아쓴 글만 남아 있습니다.</p>' : ''}</div>
       <h3>내가 한 말</h3>
       <p class="transcript">${esc(r.transcript || m.text)}</p>
+      ${arr(m.adds).length ? `<h3>이어서 한 말</h3>${arr(m.adds).map(addHTML).join('')}` : ''}
+      <div class="add-row">${isRecording() && cur.target === id
+        ? `<button class="btn primary" data-act="addstop">멈추기 <span id="addTimer">0:00</span></button>`
+        : `<button class="link-btn" data-act="addvoice">🎙 이어서 말하기</button><button class="link-btn" data-act="addtext">✎ 이어서 적기</button>`}</div>
       <h3>핵심</h3>${ul(r.points)}
       ${m.opinionWorking ? `<p class="ai-wait">AI가 의견을 쓰는 중…</p>`
         : hasOpinion(r) ? `<button class="link-btn ai-toggle" data-act="opinion" aria-expanded="${showOpinion ? 'true' : 'false'}">${showOpinion ? 'AI 의견 접기 ▴' : 'AI 의견 보기 ▾'}</button>`
@@ -670,20 +901,36 @@ async function openDetail(id, showOpinion){
   body += `<div class="actions">
     ${canRedo ? `<button class="btn primary" data-act="redo">${m.status === 'done' ? '다시 정리' : '정리하기'}</button>` : ''}
     ${m.status === 'done' ? `<button class="btn" data-act="copy">글로 복사</button><button class="btn" data-act="ppt">PPT 만들기</button>${gdocReady() ? `<button class="btn" data-act="gdoc">${m.gdoc ? '독스에 다시 보내기' : '구글 독스로'}</button>` : ''}` : ''}
+    ${m.archived ? `<button class="btn" data-act="unarchive">보관 풀기</button>` : m.status === 'done' ? `<button class="btn" data-act="archive">보관</button>` : ''}
     <button class="btn danger" data-act="del">삭제</button>
     <button class="btn" data-act="close">닫기</button>
   </div>`;
   showSheet(body);
-  if (m.kind === 'voice' && !m.noAudio){
+  // 처음 녹음과 이어서 말한 녹음들의 재생기를 채운다 (시트를 다시 그릴 때마다 옛 주소는 풀어 준다)
+  freeAudio();
+  const slots = [];
+  if (m.kind === 'voice' && !m.noAudio) slots.push([id, '#audioSlot']);
+  arr(m.adds).forEach(a => { if (a.kind === 'voice' && !a.noAudio) slots.push([a.id, `[data-addaudio="${a.id}"]`]); });
+  for (const [key, sel] of slots){
     try{
-      const blob = await idb.get(id);
+      const blob = await idb.get(key);
       if (blob && openId === id){
-        if (audioUrl) URL.revokeObjectURL(audioUrl);
-        audioUrl = URL.createObjectURL(blob);
-        const slot = $('#audioSlot'); if (slot) slot.innerHTML = `<audio controls src="${audioUrl}"></audio>`;
+        const slot = $('#sheetBody ' + sel); if (!slot) continue;
+        const u = URL.createObjectURL(blob); audioUrls.push(u);
+        slot.innerHTML = `<audio controls src="${u}"></audio>`;
       }
     }catch(e){}
   }
+}
+function addHTML(a){
+  const head = `<div class="meta">${fmtDate(a.at)} · ${relTime(a.at)}${a.kind === 'voice' ? ` 🎙 ${a.dur || ''}초` : ' ✎'}</div>`;
+  const text = a.status === 'done' ? `<p class="transcript">${esc(a.text)}</p>`
+    : a.status === 'error' ? `<p class="state-err">${esc(a.err)}</p>${a.kind === 'voice' && a.noAudio ? '' : `<button class="link-btn" data-act="redoadd" data-aid="${a.id}">다시 받아쓰기</button>`}`
+    : `<p class="hint">${a.kind === 'text' ? esc(a.src) + '<br>' : ''}받아쓰는 중…</p>`;
+  const busy = a.status === 'working' || a.status === 'pending';
+  return `<div class="add-item">${head}${text}
+    ${a.kind === 'voice' && !a.noAudio ? `<div data-addaudio="${a.id}"></div>` : ''}
+    ${busy ? '' : `<button class="link-btn" data-act="deladd" data-aid="${a.id}">지우기</button>`}</div>`;
 }
 
 $('#sheetBody').onclick = e => {
@@ -696,9 +943,24 @@ $('#sheetBody').onclick = e => {
     $('#detailDot').style.background = catColor(m.r.category); $('#detailCat').textContent = m.r.category;
     return;
   }
+  const sb = e.target.closest('[data-stage]');
+  if (sb && m){
+    m.stage = sb.dataset.stage; saveMemos(); render(); scheduleDocSync(m);
+    $('#sheetBody').querySelectorAll('[data-stage]').forEach(x => x.setAttribute('aria-pressed', x === sb));
+    return;
+  }
   const b = e.target.closest('[data-act]'); if (!b) return;
   const act = b.dataset.act;
   if (act === 'close') return closeSheet();
+  if (act === 'addvoice'){ if (isRecording()){ toast('지금 녹음 중입니다. 먼저 멈춰 주세요'); return; } return startRec(id); }
+  if (act === 'addstop') return stopRec();
+  if (act === 'addtext') return openAddText(id);
+  if (act === 'saveadd') return saveAddText();
+  if (act === 'canceladd'){ const t = addFor; addFor = null; return t ? openDetail(t) : closeSheet(); }
+  if (act === 'redoadd') return processAdd(id, b.dataset.aid);
+  if (act === 'deladd') return deleteAdd(m, b.dataset.aid);
+  if (act === 'archive') return archiveMemo(id, true);
+  if (act === 'unarchive') return archiveMemo(id, false);
   if (act === 'redo') return processMemo(id);
   if (act === 'askopinion' || act === 'redoopinion') return requestOpinion(id);
   if (act === 'opinion'){   // 보기/접기 — 시트를 다시 그리지 않아 재생 중인 오디오가 안 끊긴다
@@ -744,7 +1006,8 @@ function copyMemo(m){
   const r = m.r, c = r.check || {};
   const li = a => arr(a).map(x => '- ' + x).join('\n') || '- 없음';
   const ai = hasOpinion(r) ? `\n\n## AI 체크\n살릴 점\n${li(c.good)}\n비어 있는 곳\n${li(c.weak)}\n생각해볼 질문\n${li(c.questions)}\n\n## 덧붙인 방향 (AI)\n${li(r.extend)}${r.draft ? '\n\n## 초안 (AI)\n' + r.draft : ''}` : '';
-  const md = `# ${r.title}\n${r.category} | ${fmtDate(m.created)}\n\n## 내가 한 말\n${r.transcript || m.text}\n\n## 핵심\n${li(r.points)}${ai}`;
+  const more = addsText(m);
+  const md = `# ${r.title}\n${r.category} | ${stageOf(m).n} | ${fmtDate(m.created)}\n\n## 내가 한 말\n${r.transcript || m.text}${more ? '\n\n## 이어서 한 말\n' + more : ''}\n\n## 핵심\n${li(r.points)}${ai}`;
   copyText(md).then(ok => toast(ok ? '복사했습니다' : '복사에 실패했습니다. 길게 눌러 직접 복사해 주세요'));
 }
 
@@ -755,9 +1018,10 @@ const gdocReady = () => /^https:\/\/script\.google\.com\/macros\/s\/[\w-]+\/exec
 function memoPayload(m){
   const r = m.r || {}, c = r.check || {};
   return {
-    id: m.id, title: r.title || '제목 없음', category: r.category || '', created: fmtDate(m.created), createdAt: m.created,
+    // 자람 단계와 이어서 한 말은 기존 칸(분류·내가 한 말)에 실어 보내 스크립트를 다시 배포하지 않아도 되게 한다
+    id: m.id, title: r.title || '제목 없음', category: [r.category, stageOf(m).n].filter(Boolean).join(' · '), created: fmtDate(m.created), createdAt: m.created,
     kind: m.kind, model: m.model || '', tags: arr(r.tags),
-    transcript: r.transcript || m.text || '', points: arr(r.points),
+    transcript: fullText(m), points: arr(r.points),
     good: arr(c.good), weak: arr(c.weak), questions: arr(c.questions), extend: arr(r.extend), draft: r.draft || ''
   };
 }
@@ -819,11 +1083,13 @@ async function testDocs(){
 
 /* 정리 끝난 녹음 원본만 일괄 삭제 — 받아쓴 글과 정리 결과는 그대로 */
 async function purgeAudio(){
+  // 처음 녹음(메모)과 이어서 말한 녹음(add) 모두 — 받아쓰기가 끝난 것만
   const targets = memos.filter(m => m.kind === 'voice' && m.status === 'done' && !m.noAudio);
+  memos.forEach(m => arr(m.adds).forEach(a => { if (a.kind === 'voice' && a.status === 'done' && !a.noAudio) targets.push(a); }));
   if (!targets.length){ toast('지울 녹음 원본이 없습니다'); return; }
   if (!confirm(`정리 완료된 녹음 원본 ${targets.length}개를 지울까요?\n받아쓴 글과 정리 내용은 그대로 남지만, 다시 정리하기는 할 수 없게 됩니다.`)) return;
   let n = 0;
-  for (const m of targets){ try{ await idb.del(m.id); m.noAudio = true; n++; }catch(e){} }
+  for (const x of targets){ try{ await idb.del(x.id); x.noAudio = true; n++; }catch(e){} }
   saveMemos(); render(); closeSheet(); toast(`녹음 원본 ${n}개를 지웠습니다`);
 }
 
@@ -951,7 +1217,10 @@ $('#importFile').onchange = async e => {
     const have = new Set(memos.map(m => m.id));
     const add = incoming.filter(m => m && m.id && !have.has(m.id)).map(normalizeMemo);
     // 가져온 음성 메모는 이 기기에 녹음 원본이 없으므로 그렇게 표시
-    add.forEach(m => { if (m.kind === 'voice' && m.status === 'done') m.noAudio = true; });
+    add.forEach(m => {
+      if (m.kind === 'voice' && m.status === 'done') m.noAudio = true;
+      arr(m.adds).forEach(a => { if (a.kind === 'voice') a.noAudio = true; });
+    });
     memos = [...memos, ...add].sort((a, b) => b.created - a.created);
     saveMemos(); render(); closeSheet(); toast(`${add.length}개를 가져왔습니다`);
   }catch(err){ toast('백업 파일을 읽지 못했습니다'); }
@@ -998,7 +1267,7 @@ async function makeDeck(list, name){
     s.addShape(P.ShapeType.rect, {x:0.8, y:1.6, w:1.2, h:0.06, fill:{color:col}, line:{color:col}});
 
     s = P.addSlide(); head(s, '내가 한 말', '녹음 원문', col);
-    s.addText(String(r.transcript || m.text || ''), {x:0.72, y:1.4, w:8.6, h:3.8, fontFace:F, fontSize:15, color:SILK, valign:'top', fit:'shrink', lineSpacingMultiple:1.3});
+    s.addText(fullText(m), {x:0.72, y:1.4, w:8.6, h:3.8, fontFace:F, fontSize:15, color:SILK, valign:'top', fit:'shrink', lineSpacingMultiple:1.3});
 
     s = P.addSlide(); head(s, '핵심', arr(r.tags).join('   '), col);
     s.addText(bullets(r.points, SILK), {x:0.72, y:1.4, w:8.6, h:3.8, fontFace:F, fontSize:20, valign:'top', paraSpaceAfter:10});
@@ -1045,6 +1314,15 @@ memos.forEach(normalizeMemo);
 saveMemos();
 render();
 if (!cfg.key) setTimeout(() => toast('설정에서 Gemini API 키를 먼저 입력하세요'), 600);
+/* 홈 화면 아이콘을 길게 눌러 나오는 바로가기 (manifest.json 의 shortcuts)
+   ?rec=1 → 열자마자 녹음 시작, ?text=1 → 글로 적기. 새로고침 때 다시 시작되지 않게 주소에서 지운다 */
+(() => {
+  const q = new URLSearchParams(location.search);
+  if (!q.has('rec') && !q.has('text')) return;
+  try{ history.replaceState(null, '', location.pathname); }catch(e){}
+  if (q.has('rec')) startRec();
+  else $('#btnText').click();
+})();
 </script>
 </body>
 </html>
