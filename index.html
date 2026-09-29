@@ -181,6 +181,17 @@ a.model-tag{color:var(--ai);text-decoration:none}
 .add-row{display:flex;flex-wrap:wrap;gap:4px 22px;margin-top:20px}
 .add-row .link-btn{padding-left:0}
 .add-row .btn.primary::before{content:"■";font-size:.7rem;color:var(--shu)}
+/* 이어서 말하는 동안 화면 맨 아래에 붙는 멈추기 막대 — 시트를 어디까지 내렸든 엄지로 바로 누른다 */
+.add-stop-bar{position:fixed;left:0;right:0;bottom:0;z-index:30;display:flex;align-items:center;justify-content:center;gap:14px;
+  width:100%;border:none;border-top:1px solid var(--line-2);background:var(--paper-2);
+  padding:22px 24px calc(22px + env(safe-area-inset-bottom));font-family:var(--serif);font-size:1.15rem;letter-spacing:.12em;color:var(--ink)}
+.add-stop-bar[hidden]{display:none}
+.add-stop-bar:active{background:var(--paper-3)}
+.add-stop-bar .sq{width:14px;height:14px;border-radius:2px;background:var(--shu);animation:blink 1.2s ease-in-out infinite}
+.add-stop-bar .t{font-family:var(--sans);font-variant-numeric:tabular-nums;font-size:.95rem;color:var(--ink-2);letter-spacing:.02em}
+@keyframes blink{50%{opacity:.35}}
+body.adding .sheet{padding-bottom:calc(112px + env(safe-area-inset-bottom))}
+body.adding .toast{bottom:calc(100px + env(safe-area-inset-bottom))}
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 </style>
 </head>
@@ -217,6 +228,7 @@ a.model-tag{color:var(--ai);text-decoration:none}
 
 <div class="sheet-bg" id="sheetBg"></div>
 <div class="sheet" id="sheet" role="dialog" aria-modal="true" tabindex="-1"><div class="grip"></div><div id="sheetBody"></div></div>
+<button class="add-stop-bar" id="addStopBar" type="button" hidden aria-label="이어서 말하기 멈추기"><span class="sq"></span><span>멈추기</span><span class="t" id="addStopTime">0:00</span></button>
 <div class="toast" id="toast"></div>
 <input type="file" id="importFile" accept="application/json" hidden>
 
@@ -374,6 +386,9 @@ const ring = $('#ring'), CIRC = 2 * Math.PI * 84;
 ring.style.strokeDasharray = CIRC; ring.style.strokeDashoffset = CIRC;
 
 $('#recBtn').onclick = () => isRecording() ? stopRec() : startRec();
+$('#addStopBar').onclick = () => stopRec();
+// 이어서 말하기 중에만 화면 아래 멈추기 막대를 보인다
+function showAddBar(on){ $('#addStopBar').hidden = !on; document.body.classList.toggle('adding', on); }
 
 /* 녹음 중 화면이 꺼지면 일부 폰은 마이크를 끊으므로 화면을 켜 둔다 */
 async function holdWake(){
@@ -402,6 +417,7 @@ async function startRec(target){
   $('#recZone').classList.add('recording');
   $('#recLabel').textContent = '멈추기';
   $('#recBtn').setAttribute('aria-label', '녹음 멈추기');
+  showAddBar(!!my.target);
   tick = setInterval(updateTimer, 250); updateTimer();
   holdWake();
   if (my.target && openId === my.target) openDetail(my.target);   // 시트의 버튼을 "멈추기"로
@@ -412,6 +428,7 @@ function updateTimer(){
   const t = `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
   $('#timer').textContent = `${cur.target ? '이어서 말하는 중' : '녹음 중'} ${t} / 5:00`;
   const at = $('#addTimer'); if (at) at.textContent = t;
+  if (cur.target) $('#addStopTime').textContent = `${t} / 5:00`;
   if (s >= MAX_SEC) stopRec();
 }
 function stopRec(){
@@ -421,6 +438,7 @@ function stopRec(){
   stream.getTracks().forEach(t => { t.onended = null; t.stop(); });
   clearInterval(tick);
   releaseWake();
+  showAddBar(false);
   $('#recZone').classList.remove('recording');
   $('#recLabel').textContent = '녹음';
   $('#recBtn').setAttribute('aria-label', '녹음 시작');
