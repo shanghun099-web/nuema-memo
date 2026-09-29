@@ -184,14 +184,14 @@ a.model-tag{color:var(--ai);text-decoration:none}
 /* 이어서 말하는 동안 화면 맨 아래에 붙는 멈추기 막대 — 시트를 어디까지 내렸든 엄지로 바로 누른다 */
 .add-stop-bar{position:fixed;left:0;right:0;bottom:0;z-index:30;display:flex;align-items:center;justify-content:center;gap:14px;
   width:100%;border:none;border-top:1px solid var(--line-2);background:var(--paper-2);
-  padding:22px 24px calc(22px + env(safe-area-inset-bottom));font-family:var(--serif);font-size:1.15rem;letter-spacing:.12em;color:var(--ink)}
+  min-height:120px;padding:30px 24px calc(30px + env(safe-area-inset-bottom));font-family:var(--serif);font-size:1.6rem;letter-spacing:.14em;color:var(--ink)}
 .add-stop-bar[hidden]{display:none}
 .add-stop-bar:active{background:var(--paper-3)}
-.add-stop-bar .sq{width:14px;height:14px;border-radius:2px;background:var(--shu);animation:blink 1.2s ease-in-out infinite}
-.add-stop-bar .t{font-family:var(--sans);font-variant-numeric:tabular-nums;font-size:.95rem;color:var(--ink-2);letter-spacing:.02em}
+.add-stop-bar .sq{width:22px;height:22px;border-radius:3px;background:var(--shu);animation:blink 1.2s ease-in-out infinite}
+.add-stop-bar .t{font-family:var(--sans);font-variant-numeric:tabular-nums;font-size:1.1rem;color:var(--ink-2);letter-spacing:.02em}
 @keyframes blink{50%{opacity:.35}}
-body.adding .sheet{padding-bottom:calc(112px + env(safe-area-inset-bottom))}
-body.adding .toast{bottom:calc(100px + env(safe-area-inset-bottom))}
+body.adding .sheet{padding-bottom:calc(150px + env(safe-area-inset-bottom))}
+body.adding .toast{bottom:calc(136px + env(safe-area-inset-bottom))}
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 </style>
 </head>
