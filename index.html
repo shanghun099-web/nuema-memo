@@ -289,6 +289,13 @@ header h1 .script{font-family:"Dancing Script",cursive;font-weight:500;font-size
 .meta{font-size:.85rem;color:var(--ink-2);letter-spacing:0}
 .meta .kind{margin-left:auto;display:inline-flex;align-items:center;gap:4px;white-space:nowrap}
 .meta .kind svg{width:18px;height:18px}
+.item .meta{white-space:nowrap;flex-wrap:wrap;row-gap:2px}   /* 좁으면 녹음·이어서 표시만 다음 줄로 (날짜·분류는 안 쪼갬) */
+/* 선택 바 — 위: 개수·전체, 아래: 보낼 곳 세 칸 */
+.pick-bar{flex-direction:column;align-items:stretch;gap:10px;padding:10px 16px calc(12px + env(safe-area-inset-bottom))}
+.pick-top{display:flex;align-items:center;justify-content:space-between}
+.pick-acts{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.pick-acts button{padding:10px 4px}
+body.picking .toast{bottom:calc(130px + env(safe-area-inset-bottom))}
 .item-title{font-family:var(--sans);font-weight:700;font-size:1.2rem;margin:6px 0 2px}
 .item-sub{font-size:.9rem;color:var(--ink)}
 /* 선택 — 카드 왼쪽 네모 체크 */
@@ -345,10 +352,12 @@ header h1 .script{font-family:"Dancing Script",cursive;font-weight:500;font-size
 <div class="sheet" id="sheet" role="dialog" aria-modal="true" tabindex="-1"><div class="grip"></div><div id="sheetBody"></div></div>
 <button class="add-stop-bar" id="addStopBar" type="button" hidden aria-label="이어서 말하기 멈추기"><span class="sq"></span><span>멈추기</span><span class="t" id="addStopTime">0:00</span></button>
 <div class="pick-bar" id="pickBar" hidden>
-  <span class="n" id="pickN">0개 선택</span>
-  <button type="button" id="pickAll">전체</button>
-  <button type="button" class="main" id="pickPpt">📄 PPT</button>
-  <button type="button" class="main" id="pickNlm">📚 NotebookLM</button>
+  <div class="pick-top"><span class="n" id="pickN">0개 선택</span><button type="button" id="pickAll">전체</button></div>
+  <div class="pick-acts">
+    <button type="button" class="main" id="pickPpt">📄 PPT</button>
+    <button type="button" class="main" id="pickNlm">📚 NotebookLM</button>
+    <button type="button" class="main" id="pickDocs">📝 독스</button>
+  </div>
 </div>
 <div class="toast" id="toast"></div>
 <input type="file" id="importFile" accept="application/json" hidden>
@@ -1015,7 +1024,7 @@ async function openDetail(id, showOpinion){
   if (m.status === 'done'){
     const c = r.check || {};
     body = `
-      <div class="meta"><span class="cat-dot" id="detailDot" style="background:${catColor(r.category)}"></span><span id="detailCat">${esc(r.category)}</span> ${fmtDate(m.created)}${m.model ? ` <span class="model-tag">${esc(m.model)}</span>` : ''}${m.gdoc ? ` <a class="model-tag" href="${esc(m.gdoc.url || '#')}" target="_blank" rel="noopener">독스 ✓</a>` : ''}</div>
+      <div class="meta"><span class="cat-dot" id="detailDot" style="background:${catColor(r.category)}"></span><span id="detailCat">${esc(r.category)}</span> ${fmtDate(m.created)}${m.model ? ` <span class="model-tag">${esc(m.model)}</span>` : ''}</div>
       <div class="title-row"><h2 id="detailTitle">${esc(r.title)}</h2><button class="link-btn" data-act="edittitle">제목 고치기</button></div>
       <div class="cat-edit" aria-label="분류 바꾸기"><span class="cat-lab">분류</span>${CATS.map(c =>
         `<button class="chip" data-cat="${c.k}" aria-pressed="${c.k === r.category}">${c.k}</button>`).join('')}</div>
@@ -1052,7 +1061,7 @@ async function openDetail(id, showOpinion){
   const canRedo = m.status !== 'working' && !(m.kind === 'voice' && m.noAudio);
   body += `<div class="actions">
     ${canRedo ? `<button class="btn primary" data-act="redo">${m.status === 'done' ? '다시 정리' : '정리하기'}</button>` : ''}
-    ${m.status === 'done' ? `<button class="btn" data-act="copy">글로 복사</button><button class="btn" data-act="ppt">PPT 만들기</button><button class="btn" data-act="knot">매듭짓기로</button>${gdocReady() ? `<button class="btn" data-act="gdoc">${m.gdoc ? '독스에 다시 보내기' : '구글 독스로'}</button>` : ''}` : ''}
+    ${m.status === 'done' ? `<button class="btn" data-act="copy">글로 복사</button><button class="btn" data-act="ppt">PPT 만들기</button><button class="btn" data-act="knot">매듭짓기로</button>` : ''}
     ${m.archived ? `<button class="btn" data-act="unarchive">보관 풀기</button>` : m.status === 'done' ? `<button class="btn" data-act="archive">보관</button>` : ''}
     <button class="btn danger" data-act="del">삭제</button>
     <button class="btn" data-act="close">닫기</button>
@@ -1135,7 +1144,6 @@ $('#sheetBody').onclick = e => {
   if (act === 'import') return $('#importFile').click();
   if (act === 'purgeaudio') return purgeAudio();
   if (act === 'loadmodels') return loadModels();
-  if (act === 'gdoc') return sendToDocs(m);
   if (act === 'gdoctest') return testDocs();
   if (act === 'gdocall') return sendAllToDocs();
   if (act === 'savetext') return saveTextMemo();
@@ -1405,7 +1413,7 @@ function setPick(on){
 function updatePickBar(){
   if (!pick) return;
   $('#pickN').textContent = `${pick.size}개 선택`;
-  $('#pickPpt').disabled = $('#pickNlm').disabled = !pick.size;
+  $('#pickPpt').disabled = $('#pickNlm').disabled = $('#pickDocs').disabled = !pick.size;
 }
 const pickedMemos = () => memos.filter(m => pick && pick.has(m.id) && m.status === 'done');
 $('#btnDeck').onclick = () => setPick(!pick);
@@ -1423,6 +1431,15 @@ $('#pickPpt').onclick = async () => {
 $('#pickNlm').onclick = () => {
   const list = pickedMemos(); if (!list.length) return;
   openNlm(list); setPick(false);
+};
+/* 고른 메모를 구글 독스로 — 이미 보낸 메모는 독스의 그 항목을 새 내용으로 바꾼다 */
+$('#pickDocs').onclick = async () => {
+  const list = pickedMemos().sort((a, b) => a.created - b.created); if (!list.length) return;
+  if (!gdocReady()){ toast('설정에서 구글 독스 연동 URL을 먼저 넣어주세요'); return; }
+  setPick(false); toast(`${list.length}개를 독스로 보내는 중…`);
+  let n = 0;
+  for (const m of list){ if (await sendToDocs(m, true)) n++; }
+  render(); toast(`${n}개를 구글 독스에 보냈습니다${n < list.length ? ` (${list.length - n}개 실패)` : ''}`);
 };
 
 /* NotebookLM 은 개인 계정용 API 가 없어서, 고른 메모를 자료 하나로 묶어 복사해 주고 붙여넣는 순서를 안내한다 */
