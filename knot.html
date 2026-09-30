@@ -338,8 +338,8 @@ JSON으로만 답해:
 ${proj.text.trim()}`;
 }
 
-async function refPart(){
-  const b = await idb.get(refKey());
+async function refPart(){ return blobPart(await idb.get(refKey())); }
+async function blobPart(b){
   if (!b) return null;
   const data = await new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(String(r.result).split(',')[1]); r.onerror = rej; r.readAsDataURL(b); });
   return {inlineData: {mimeType: b.type || 'image/png', data}};
@@ -352,6 +352,37 @@ const cleanBible = b => ({
   cast: arr(b && b.cast).map(c => ({id: str(c.id) || uid(), ko: str(c.ko), ko_desc: str(c.ko_desc), en: str(c.en)})).filter(c => c.en),
   world: str(b && b.world), world_ko: str(b && b.world_ko), palette: str(b && b.palette), scale: str(b && b.scale), scale_ko: str(b && b.scale_ko), arc: str(b && b.arc), arc_ko: str(b && b.arc_ko)
 });
+
+/* 받은 장면 그림을 AI가 직접 보고 크기 기준을 만든다 — 첫 장면 그림을 "크기의 정답"으로 삼는 방식.
+   그림 속 크기가 현실과 어긋나 보이면 warn 으로 알려 준다 (그 그림은 먼저 고친 뒤 다시 올리는 게 좋다) */
+async function scaleFromImage(s){
+  if (!apiKey()){ toast('Gemini API 키를 넣어 주세요'); return openSettings(); }
+  const b = proj.bible; if (!b) return;
+  const i = proj.scenes.indexOf(s);
+  const img = await blobPart(await idb.get('scene:' + s.id));
+  if (!img) return toast('이 장면에 올린 그림이 없습니다');
+  const card = document.querySelector(`.scene[data-id="${s.id}"]`); card && card.classList.add('busy');
+  toast(`장면 ${pad(i + 1)} 그림을 보고 크기를 재는 중…`);
+  const prompt = `첨부한 그림은 그림책의 장면 ${i + 1}이야. 이 그림 속 크기를 앞으로 모든 장면의 "크기 기준"으로 삼을 거야.
+그림을 자세히 보고 scale 을 써줘:
+- 그림에 보이는 중요한 사물마다, 인물의 몸(손가락·엄지·손바닥·손목·팔뚝)과 비교한 굵기·길이, 그리고 대략의 실제 크기(cm).
+- 사물끼리의 관계 (무엇이 무엇보다 굵은지, 무엇 안에 들어가는지).
+- 그림에 안 보이는 사물은 아래 지금 크기 기준을 그대로 살리거나, 보이는 것과 맞게 현실적으로.
+- 영어 2~5문장.
+또 그림 속 크기가 현실이나 이야기와 어긋나 보이는 곳(예: 브러시가 배수관보다 굵음)이 있으면 warn 에 한국어로 짧게. 없으면 빈 문자열.
+인물·사물 설정: ${JSON.stringify(b.cast.map(c => c.en))}
+지금 크기 기준: ${b.scale || '(없음)'}
+이 장면 설명: ${s.action}
+JSON으로만: {"scale":"","scale_ko":"","warn":""}`;
+  try{
+    const {json} = await geminiJSON([img, {text: prompt}]);
+    b.scale = str(json.scale); b.scale_ko = str(json.scale_ko); saveProj(); renderBible(); refreshPrompts();
+    const warn = str(json.warn);
+    if (warn) alert(`장면 ${pad(i + 1)} 그림으로 크기 기준을 만들었어요.\n\n그런데 이 그림에서 어색한 크기가 보여요:\n${warn}\n\n"받은 그림 조금 고치기"로 먼저 고친 뒤 다시 올리면 크기 기준도 다시 잡힙니다.`);
+    else toast(`장면 ${pad(i + 1)} 그림으로 크기 기준을 잡았습니다. 모든 프롬프트에 들어갔어요`);
+  }catch(e){ toast('크기 재기 실패 — ' + (e.message || e)); }
+  card && card.classList.remove('busy');
+}
 
 /* 크기 기준만 따로 만들기 — 이미 장면을 나눈 작업에 나중에 채울 때 */
 async function fillScale(request){
@@ -508,6 +539,7 @@ function renderBible(){
     <textarea class="en" data-b="world" aria-label="장소 영어 묘사">${esc(b.world)}</textarea>
     <h3 style="margin-top:16px">크기 기준</h3>
     <div class="ko">${esc(b.scale_ko || '사물이 장면마다 커졌다 작아졌다 하지 않게, 실제 크기와 손·손목·팔뚝에 빗댄 크기로 고정합니다')}</div>
+    <p class="hint" style="margin:0 0 4px">장면 01 그림을 올리면 AI가 그림을 보고 자동으로 다시 잡습니다.</p>
     <textarea class="en" data-b="scale" aria-label="크기 기준" placeholder="예: The drain brush is about 40 cm long and as thin as a pencil...">${esc(b.scale || '')}</textarea>
     <div class="row" style="margin-top:6px">
       <input type="text" id="scaleAsk" placeholder="예: 브러시 솔은 엄지손가락 굵기로" aria-label="크기 요청">
@@ -578,6 +610,7 @@ function renderScenes(){
         <label class="btn">그림 올리기<input type="file" accept="image/*" data-act="upload" hidden></label>
         <button class="btn" data-act="down">받기</button>
       </div>
+      <button class="link" data-act="scaleimg" style="margin-top:6px">📏 이 그림으로 크기 기준 잡기${i === 0 ? ' (장면 01은 올리면 자동)' : ''}</button>
     </div>`).join('');
   proj.scenes.forEach(s => showSceneImg(s.id));
   renderCheck(); renderExport();
@@ -628,7 +661,9 @@ $('#scenes').addEventListener('keydown', e => {
 $('#scenes').addEventListener('change', async e => {
   if (e.target.dataset.act !== 'upload') return;
   const s = sceneOf(e.target), f = e.target.files[0]; if (!s || !f) return;
-  await idb.set('scene:' + s.id, f); e.target.value = ''; showSceneImg(s.id); toast('그림을 넣었습니다');
+  await idb.set('scene:' + s.id, f); e.target.value = ''; showSceneImg(s.id);
+  if (proj.scenes.indexOf(s) === 0 && proj.bible && apiKey()) scaleFromImage(s);   // 첫 장면 그림 = 크기의 정답
+  else toast('그림을 넣었습니다');
 });
 $('#scenes').addEventListener('click', async e => {
   const b = e.target.closest('[data-act]'); if (!b || b.tagName === 'INPUT') return;
@@ -674,6 +709,7 @@ $('#scenes').addEventListener('click', async e => {
     case 'del':
       if (!confirm(`장면 ${pad(i + 1)}을 지울까요? 자막 줄도 같이 빠집니다.`)) return;
       proj.scenes.splice(i, 1); saveProj(); renderScenes(); idb.del('scene:' + s.id); break;
+    case 'scaleimg': scaleFromImage(s); break;
     case 'down': {
       const img = await idb.get('scene:' + s.id); if (!img) return toast('아직 올린 그림이 없습니다');
       download(img, `${pad(i + 1)}.png`); break;
