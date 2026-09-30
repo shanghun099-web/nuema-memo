@@ -1,0 +1,740 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#F7F4EC">
+<title>매듭짓기</title>
+<link rel="icon" href="icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Gowun+Batang:wght@400;700&family=IBM+Plex+Sans+KR:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+/* 매듭짓기 — 글을 장면으로 나누고, 장면끼리 이어지는 그림 프롬프트(영어)를 만든다.
+   누에마 메모와 같은 종이·먹 톤. 메모 앱의 탭 안(iframe)에서도, 따로 열어도 동작한다. */
+:root{
+  --paper:#F7F4EC; --paper-2:#FCFAF5; --paper-3:#EFEBE1; --line:#DAD5C8; --line-2:#C9C3B4;
+  --ink:#2A2924; --ink-2:#6E6A61; --ink-3:#A39E92;
+  --shu:#C3502F; --ai:#5E6688; --moss:#7B8A6C;
+  --serif:"Gowun Batang","Nanum Myeongjo","Apple Myungjo",serif;
+  --sans:"IBM Plex Sans KR","Apple SD Gothic Neo","Malgun Gothic",sans-serif;
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--sans);font-size:16px;line-height:1.7;-webkit-font-smoothing:antialiased}
+body{padding-bottom:calc(48px + env(safe-area-inset-bottom))}
+button{font:inherit;color:inherit;cursor:pointer;-webkit-tap-highlight-color:transparent}
+button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-visible{outline:1px solid var(--ink);outline-offset:3px}
+.wrap{max-width:640px;margin:0 auto;padding:0 18px}
+header{display:flex;align-items:baseline;justify-content:space-between;padding:26px 0 6px}
+header h1{font-family:var(--serif);font-weight:400;font-size:1.05rem;margin:0;letter-spacing:.14em}
+header nav{display:flex;gap:14px}
+.link{background:none;border:none;padding:4px 0;font-size:.82rem;color:var(--ink-2);letter-spacing:.04em;text-decoration:none}
+.lead{font-size:.86rem;color:var(--ink-2);margin:4px 0 0}
+/* 메모 앱 탭 안에서는 머리글을 줄인다 */
+.embed header{padding-top:6px}
+.embed header h1,.embed .to-memo{display:none}
+
+section.step{border-top:1px solid var(--line);margin-top:26px;padding-top:18px}
+.step h2{font-family:var(--serif);font-weight:400;font-size:1rem;margin:0 0 10px;letter-spacing:.06em;display:flex;align-items:baseline;gap:10px}
+.step h2 .n{font-family:var(--sans);font-size:.72rem;color:var(--shu);letter-spacing:.1em}
+label.f{display:block;font-size:.8rem;color:var(--ink-2);margin:12px 0 4px}
+input[type=text],input[type=password],textarea,select{width:100%;font:inherit;font-size:.95rem;color:var(--ink);background:var(--paper-2);border:1px solid var(--line);border-radius:6px;padding:10px 12px}
+textarea{resize:vertical;line-height:1.65}
+textarea.essay{min-height:220px;font-family:var(--serif)}
+textarea.en{font-size:.84rem;line-height:1.55;min-height:64px}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.row > select,.row > input[type=text]{flex:1;min-width:0}
+.btn{background:var(--paper-2);border:1px solid var(--line-2);border-radius:999px;padding:7px 14px;font-size:.84rem;white-space:nowrap}
+.btn:hover{border-color:var(--ink-3)}
+.btn.main{background:var(--ink);color:var(--paper);border-color:var(--ink)}
+.btn.ai{border-color:var(--ai);color:var(--ai)}
+.btn.warn{color:var(--shu);border-color:transparent;background:none}
+.btn[disabled]{opacity:.45;cursor:default}
+.hint{font-size:.78rem;color:var(--ink-3);margin:6px 0 0}
+.ref{display:flex;gap:12px;align-items:center;margin-top:10px}
+.ref .thumb{width:72px;height:72px;border:1px dashed var(--line-2);border-radius:6px;background:var(--paper-3) center/cover no-repeat;flex:none;display:grid;place-items:center;font-size:.7rem;color:var(--ink-3)}
+
+/* 이야기 설정표 */
+.bible{background:var(--paper-2);border:1px solid var(--line);border-left:3px solid var(--ai);border-radius:8px;padding:12px 14px;margin-top:4px}
+.bible h3{font-family:var(--serif);font-weight:400;font-size:.95rem;margin:0}
+.bible .ko{font-size:.8rem;color:var(--ai);margin:2px 0 4px}
+.cast-item{margin-top:12px}
+.cast-item .name{font-size:.84rem;font-weight:600}
+
+/* 장면 카드 */
+.scene{background:var(--paper-2);border:1px solid var(--line);border-radius:10px;padding:14px;margin-top:14px}
+.scene .top{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.scene .no{font-family:var(--serif);font-size:.95rem;letter-spacing:.08em}
+.scene .no small{font-family:var(--sans);font-size:.72rem;color:var(--ink-3);margin-left:8px;letter-spacing:0}
+.scene .tools{display:flex;gap:2px;flex-wrap:wrap;justify-content:flex-end}
+.scene .tools button{background:none;border:none;font-size:.76rem;color:var(--ink-2);padding:4px 6px}
+.scene .tools button:hover{color:var(--ink)}
+.scene textarea.lines{font-family:var(--serif);min-height:110px;margin-top:8px}
+.scene .desc{font-size:.84rem;color:var(--ai);margin:10px 0 0}
+.scene .desc b{font-weight:500;color:var(--ink-2);font-size:.74rem;margin-right:6px}
+pre.prompt{background:var(--paper-3);border-radius:6px;padding:10px 12px;font-size:.76rem;line-height:1.55;white-space:pre-wrap;word-break:break-word;margin:10px 0 0;max-height:220px;overflow:auto;font-family:ui-monospace,Consolas,monospace;color:var(--ink)}
+.scene details{margin-top:10px}
+.scene summary{font-size:.8rem;color:var(--ink-2);cursor:pointer}
+.scene .ask{margin-top:10px}
+.busy{opacity:.55;pointer-events:none}
+.pic{display:flex;gap:10px;align-items:center;margin-top:12px}
+.pic .img{width:64px;height:64px;border-radius:6px;border:1px solid var(--line);background:var(--paper-3) center/cover no-repeat;display:grid;place-items:center;font-size:.66rem;color:var(--ink-3);text-align:center;cursor:pointer;flex:none}
+
+.empty{padding:22px 0;color:var(--ink-3);font-size:.88rem;text-align:center}
+.check{font-size:.8rem;margin-top:10px;padding:8px 12px;border-radius:6px;background:var(--paper-3);color:var(--ink-2)}
+.check.bad{color:var(--shu)}
+.how{font-size:.8rem;color:var(--ink-2);background:var(--paper-3);border-radius:6px;padding:10px 12px;margin:12px 0 0}
+.how ol{margin:4px 0 0;padding-left:18px}
+pre.code{background:var(--paper-3);border-radius:6px;padding:12px;font-size:.74rem;line-height:1.5;max-height:240px;overflow:auto;white-space:pre-wrap;word-break:break-all}
+
+dialog{border:1px solid var(--line-2);border-radius:10px;background:var(--paper);color:var(--ink);width:min(520px,calc(100vw - 32px));padding:18px}
+dialog::backdrop{background:rgba(42,41,36,.35)}
+dialog h3{font-family:var(--serif);font-weight:400;margin:0 0 6px}
+.toast{position:fixed;left:50%;bottom:calc(24px + env(safe-area-inset-bottom));transform:translateX(-50%);background:var(--ink);color:var(--paper);padding:9px 16px;border-radius:999px;font-size:.84rem;max-width:calc(100vw - 32px);opacity:0;pointer-events:none;transition:opacity .2s;z-index:10}
+.toast.on{opacity:1}
+.bigimg{width:100%;border-radius:6px;display:block}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>매듭짓기</h1>
+    <nav>
+      <a class="link to-memo" href="./">메모로</a>
+      <button class="link" id="btnSettings">키 설정</button>
+    </nav>
+  </header>
+  <p class="lead">글을 장면으로 나누고, 장면끼리 이어지는 그림 프롬프트를 영어로 만듭니다.</p>
+
+  <!-- 1. 그림체 -->
+  <section class="step">
+    <h2><span class="n">1</span>그림체와 기준 그림</h2>
+    <div class="row">
+      <select id="styleSel" aria-label="그림체 고르기"></select>
+      <button class="btn" id="styleAdd">새 그림체</button>
+      <button class="btn warn" id="styleDel">삭제</button>
+    </div>
+    <label class="f" for="styleName">이름</label>
+    <input type="text" id="styleName">
+    <label class="f" for="styleText">그림체 설명 (영어) — 모든 프롬프트 맨 앞에 똑같이 붙습니다</label>
+    <textarea id="styleText" class="en" rows="4"></textarea>
+    <div class="ref">
+      <div class="thumb" id="refThumb">기준 그림</div>
+      <div>
+        <div class="row">
+          <label class="btn" for="refFile">기준 그림 올리기</label>
+          <input type="file" id="refFile" accept="image/*" hidden>
+          <button class="btn warn" id="refDel">빼기</button>
+        </div>
+        <p class="hint">마음에 드는 그림 한 장. AI가 이 그림을 보고 인물과 그림체를 글로 옮겨 모든 장면에 똑같이 넣습니다. 그림을 그릴 때도 AI에게 같이 보내세요.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 2. 글 -->
+  <section class="step" id="stepText">
+    <h2><span class="n">2</span>글</h2>
+    <label class="f" for="title">제목</label>
+    <input type="text" id="title" placeholder="예: 배수관을 뜯어내고서야 알게 된 것들">
+    <label class="f" for="essay">본문</label>
+    <textarea class="essay" id="essay" placeholder="준비된 글을 그대로 붙여넣으세요."></textarea>
+    <label class="f" for="sceneCount">장면 수</label>
+    <select id="sceneCount">
+      <option value="auto">AI가 글 흐름에 맞게 (보통 4~7장면)</option>
+      <option>3</option><option>4</option><option>5</option><option>6</option><option>7</option><option>8</option><option>10</option>
+    </select>
+    <div class="row" style="margin-top:12px">
+      <button class="btn main" id="btnSplit">장면 나누고 프롬프트 만들기</button>
+    </div>
+    <p class="hint">AI는 글을 고치지 않고 자르기만 합니다. 자막 한 줄 단위로 끊고, 뜻이 바뀌는 곳에서 장면을 나눕니다.</p>
+  </section>
+
+  <!-- 3. 설정표 + 장면 -->
+  <section class="step" id="stepScenes" hidden>
+    <h2><span class="n">3</span>이야기 설정표</h2>
+    <div class="bible" id="bible"></div>
+    <p class="hint">여기 적힌 영어 문장이 모든 장면 프롬프트에 글자 그대로 들어가 인물·사물·장소가 흔들리지 않게 합니다. 고치면 모든 장면에 바로 반영됩니다.</p>
+
+    <h2 style="margin-top:26px"><span class="n">4</span>장면과 프롬프트</h2>
+    <div class="how">
+      <b>Gemini 앱에서 그리는 순서</b>
+      <ol>
+        <li>새 대화를 열고 기준 그림을 첨부한 뒤 <b>시작 메시지</b>를 붙여넣기</li>
+        <li>같은 대화에서 장면 01, 02… 프롬프트를 차례로 붙여넣기. 장면 02부터는 <b>앞 장면에서 받은 그림도 함께 첨부</b>하면 더 잘 이어집니다</li>
+        <li>80% 마음에 들면 다시 뽑지 말고 "수정 문장 복사"로 고치기</li>
+        <li>받은 그림은 각 장면의 "그림 올리기"로 넣기</li>
+      </ol>
+    </div>
+    <div class="row" style="margin-top:12px">
+      <button class="btn main" id="btnCopyStart">시작 메시지 복사</button>
+      <button class="btn" id="btnCopyAll">프롬프트 모두 복사</button>
+    </div>
+    <div id="check"></div>
+    <div id="scenes"></div>
+  </section>
+
+  <!-- 5. 내보내기 -->
+  <section class="step" id="exportStep" hidden>
+    <h2><span class="n">5</span>영상 공장으로 보내기</h2>
+    <div class="row">
+      <button class="btn main" id="btnDownAll">그림 모두 받기 (01.png…)</button>
+      <button class="btn" id="btnCopyScript">대본 코드 복사</button>
+      <button class="btn" id="btnTimeline">timeline.json 받기</button>
+    </div>
+    <p class="hint">그림은 shorts-remotion/public/images 에, 대본 코드는 src/script.ts 의 title·parts 자리에 들어갑니다. 로드에게 "이걸로 새 쇼츠 만들어 줘" 하면 됩니다.</p>
+    <pre class="code" id="scriptOut"></pre>
+  </section>
+</div>
+
+<dialog id="dlgSettings">
+  <h3>키 설정</h3>
+  <p class="hint" style="margin-top:0">Gemini 키는 누에마 메모와 같이 씁니다. 메모 설정에서 넣었다면 이미 들어와 있어요.</p>
+  <label class="f" for="cfgKey">Gemini API 키</label>
+  <input type="password" id="cfgKey" autocomplete="off">
+  <div class="row" style="margin-top:16px;justify-content:flex-end">
+    <button class="btn" id="cfgCancel">닫기</button>
+    <button class="btn main" id="cfgSave">저장</button>
+  </div>
+</dialog>
+
+<dialog id="dlgImg">
+  <img class="bigimg" id="bigImg" alt="">
+  <div class="row" style="margin-top:12px;justify-content:flex-end"><button class="btn" id="bigClose">닫기</button></div>
+</dialog>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const $ = s => document.querySelector(s);
+const arr = x => Array.isArray(x) ? x : [];
+const str = x => typeof x === 'string' ? x.trim() : '';
+const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+const pad = n => String(n).padStart(2, '0');
+const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+let toastT;
+function toast(msg){ const t = $('#toast'); t.textContent = msg; t.classList.add('on'); clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove('on'), 3400); }
+const store = {
+  get(k, d){ try{ const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; }catch(e){ return d; } },
+  set(k, v){ try{ localStorage.setItem(k, JSON.stringify(v)); }catch(e){ toast('저장 공간이 부족합니다'); } }
+};
+if (window.self !== window.top) document.documentElement.classList.add('embed');
+
+/* 그림은 커서 IndexedDB 에 둔다 (기준 그림 ref:<그림체>, 장면 그림 scene:<장면>) */
+const idb = (() => {
+  let dbp;
+  const open = () => dbp || (dbp = new Promise((res, rej) => {
+    const r = indexedDB.open('nuema_knot', 1);
+    r.onupgradeneeded = () => r.result.createObjectStore('img');
+    r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error);
+  }));
+  const tx = async (mode, fn) => { const db = await open(); return new Promise((res, rej) => { const t = db.transaction('img', mode); const q = fn(t.objectStore('img')); t.oncomplete = () => res(q && q.result); t.onerror = () => rej(t.error); }); };
+  return { get: k => tx('readonly', s => s.get(k)).catch(() => null), set: (k, v) => tx('readwrite', s => s.put(v, k)), del: k => tx('readwrite', s => s.delete(k)).catch(() => {}) };
+})();
+
+/* ---------- 상태 ---------- */
+const DEFAULT_STYLE = {
+  id: 'maum-watercolor',
+  name: '마음 배달부 수채화',
+  text: 'Soft hand-painted watercolor illustration with the warmth of a Japanese hand-drawn animated film. Fine pencil outlines, gentle paper texture, muted blues balanced by warm amber light, calm and quiet mood. Emotion is carried by light, space and objects rather than dramatic expressions.'
+};
+let styles = store.get('nuema_styles_v1', null) || [DEFAULT_STYLE];
+// 프로젝트: 글 + 설정표(bible) + 장면들
+let proj = Object.assign({styleId: styles[0].id, title: '', text: '', count: 'auto', bible: null, scenes: []}, store.get('nuema_knot_v1', {}));
+const saveProj = () => store.set('nuema_knot_v1', proj);
+const saveStyles = () => store.set('nuema_styles_v1', styles);
+const curStyle = () => styles.find(s => s.id === proj.styleId) || styles[0];
+const refKey = () => 'ref:' + curStyle().id;
+// 키는 누에마 메모 설정(nuema_cfg_v1)과 같이 쓴다. 메모 탭에서 바꿨을 수 있으니 매번 새로 읽는다
+const memoCfg = () => store.get('nuema_cfg_v1', {});
+const apiKey = () => str(memoCfg().key);
+
+/* ---------- 1. 그림체 ---------- */
+function renderStyles(){
+  $('#styleSel').innerHTML = styles.map(s => `<option value="${s.id}">${esc(s.name)}</option>`).join('');
+  $('#styleSel').value = curStyle().id;
+  $('#styleName').value = curStyle().name;
+  $('#styleText').value = curStyle().text;
+  showRef();
+}
+async function showRef(){
+  const b = await idb.get(refKey()), t = $('#refThumb');
+  if (t.dataset.url) URL.revokeObjectURL(t.dataset.url);
+  if (b){ const u = URL.createObjectURL(b); t.dataset.url = u; t.style.backgroundImage = `url(${u})`; t.textContent = ''; }
+  else { t.dataset.url = ''; t.style.backgroundImage = ''; t.textContent = '기준 그림'; }
+}
+$('#styleSel').onchange = e => { proj.styleId = e.target.value; saveProj(); renderStyles(); renderScenes(); };
+$('#styleName').oninput = e => { curStyle().name = e.target.value; saveStyles(); $('#styleSel').selectedOptions[0].textContent = e.target.value; };
+$('#styleText').oninput = e => { curStyle().text = e.target.value; saveStyles(); refreshPrompts(); };
+$('#styleAdd').onclick = () => {
+  const s = {id: uid(), name: '새 그림체', text: curStyle().text};
+  styles.push(s); proj.styleId = s.id; saveStyles(); saveProj(); renderStyles(); $('#styleName').select();
+};
+$('#styleDel').onclick = async () => {
+  if (styles.length === 1) return toast('그림체는 하나 이상 있어야 합니다');
+  if (!confirm(`'${curStyle().name}' 그림체를 지울까요?`)) return;
+  await idb.del(refKey());
+  styles = styles.filter(s => s.id !== curStyle().id); proj.styleId = styles[0].id; saveStyles(); saveProj(); renderStyles(); refreshPrompts();
+};
+$('#refFile').onchange = async e => { const f = e.target.files[0]; if (!f) return; await idb.set(refKey(), f); e.target.value = ''; showRef(); toast('기준 그림을 넣었습니다'); };
+$('#refDel').onclick = async () => { await idb.del(refKey()); showRef(); };
+
+/* ---------- 2. 글 ---------- */
+function fillText(){ $('#title').value = proj.title; $('#essay').value = proj.text; $('#sceneCount').value = proj.count; }
+$('#title').oninput = e => { proj.title = e.target.value; saveProj(); renderExport(); };
+$('#essay').oninput = e => { proj.text = e.target.value; saveProj(); renderCheck(); };
+$('#sceneCount').onchange = e => { proj.count = e.target.value; saveProj(); };
+
+/* 메모 탭에서 "매듭짓기로 보내기" 한 글을 받는다 */
+function checkInbox(){
+  const m = store.get('nuema_knot_inbox', null);
+  if (!m) return;
+  localStorage.removeItem('nuema_knot_inbox');
+  const busy = proj.text.trim() && proj.text.trim() !== str(m.text);
+  if (busy && !confirm(`메모 "${m.title || '제목 없음'}"을 가져올까요?\n지금 매듭짓기에 있는 글과 장면은 사라집니다.`)) return;
+  clearScenes().then(() => {
+    proj.title = str(m.title); proj.text = str(m.text); proj.bible = null; saveProj();
+    fillText(); renderAll();
+    $('#stepText').scrollIntoView({behavior: 'smooth'});
+    toast('메모를 가져왔습니다. 글을 다듬고 장면을 나눠 보세요');
+  });
+}
+window.addEventListener('message', e => { if (e.origin === location.origin && e.data === 'knot-inbox') checkInbox(); });
+
+/* ---------- AI: 장면 나누기 + 설정표 ---------- */
+function splitPrompt(hasRef){
+  const n = proj.count === 'auto' ? '4~7개 (글 흐름에 맞게)' : `정확히 ${proj.count}개`;
+  return `너는 수채화 그림책처럼 이어지는 에세이 쇼츠의 장면 연출가야. 아래 산문을 장면으로 나누고, 모든 그림이 한 권의 그림책처럼 이어지도록 그림 설계를 해줘.
+${hasRef ? '\n첨부한 그림은 기준 그림이야. 그림 속 인물이 이 글의 주인공(화자)이야. 인물의 나이·얼굴·머리·옷·색을 이 그림을 보고 정확히 묘사해.\n' : ''}
+[글 자르기]
+1. 원문을 한 글자도 고치거나 빼거나 보태지 마. 순서도 그대로. 자르기만 해.
+2. 자막 한 줄 = 화면에 한 번 나오는 글. 대략 14~30자, 숨 쉬는 자리(쉼표·문장 끝·의미 단위)에서 끊어.
+3. 장면은 ${n}. 시간·장소·감정이 바뀌는 곳에서 나눠. 장면 하나에 그림 하나.
+
+[이야기 설정표 bible — 모든 장면에 글자 그대로 반복해서 넣을 문장들]
+- cast: 두 장면 이상 나오는 인물과 중요한 사물. id(영문 소문자), ko(한국어 이름), ko_desc(한국어 설명 한 줄), en(영어 고정 묘사 1~2문장: 나이·체형·머리·얼굴·옷과 색 / 사물은 재질·색·크기·특징. 장면마다 달라지지 않는 것만. 옷·머리·사물의 주요 색은 색 이름 뒤에 HEX 코드를 붙여, 예: soft blue knit sweater (#5B7FA6)).
+- world: 이야기의 주 무대 (영어 1~2문장: 공간 구조, 재질, 소품, 기본 색) / world_ko: 한국어 한 줄
+- palette: 이야기 전체의 주요 색 4~6개를 영어 한 줄로, 색 이름과 HEX 코드 (예: dusty blue #7C93AE, warm amber #E3A857, ...)
+- arc: 이야기 흐름에 따라 빛과 색이 어떻게 변하는지 (영어 한 문장, 예: from cold blue dawn to warm golden afternoon) / arc_ko: 한국어 한 줄
+
+[장면마다]
+- lines: 자막 줄 배열
+- ko: 이 그림에 무엇이 보이는지 한국어 한두 문장
+- cast: 이 장면에 보이는 cast id 배열
+- action: 영어. 이 장면에서 보이는 것 — 누가/무엇이 어디서 무엇을 하는지, 표정·자세·손, 소품 위치. 2~3문장. cast 의 생김새는 다시 쓰지 말고 이름(예: the woman, the brush)으로만 가리켜.
+- shot: 영어. 카메라 거리와 각도 (wide establishing / medium / close-up of hands / extreme close-up of object / low angle / over-the-shoulder / top-down 등). 이웃 장면과 겹치지 않게.
+- light: 영어. 이 장면의 빛 방향·색·시간대. arc 를 따라 자연스럽게 변하게.
+- link: 영어 한 문장. 앞 장면과 어떻게 이어지는지 (같은 장소 다른 각도, 시간이 흘러, 같은 물건이 다시 등장 등). 첫 장면은 빈 문자열.
+- keep: 영어. 앞 장면들에서 이야기로 바뀌어 이 장면에도 그대로 유지돼야 하는 상태 (예: The pipe under the sink is already disassembled and lies on the floor. / The brush is stuck inside the pipe). 없으면 빈 문자열.
+- 감정은 과장된 표정보다 빛·공간·사물로. 그림 속에 글자는 없게.
+
+JSON으로만 답해:
+{"bible":{"cast":[{"id":"","ko":"","ko_desc":"","en":""}],"world":"","world_ko":"","palette":"","arc":"","arc_ko":""},
+ "scenes":[{"lines":[""],"ko":"","cast":[""],"action":"","shot":"","light":"","link":"","keep":""}]}
+
+제목: ${proj.title || '(없음)'}
+
+본문:
+${proj.text.trim()}`;
+}
+
+async function refPart(){
+  const b = await idb.get(refKey());
+  if (!b) return null;
+  const data = await new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(String(r.result).split(',')[1]); r.onerror = rej; r.readAsDataURL(b); });
+  return {inlineData: {mimeType: b.type || 'image/png', data}};
+}
+const cleanScene = s => ({
+  lines: arr(s.lines).map(String).map(x => x.trim()).filter(Boolean),
+  ko: str(s.ko), cast: arr(s.cast).map(String), action: str(s.action), shot: str(s.shot), light: str(s.light), link: str(s.link), keep: str(s.keep)
+});
+const cleanBible = b => ({
+  cast: arr(b && b.cast).map(c => ({id: str(c.id) || uid(), ko: str(c.ko), ko_desc: str(c.ko_desc), en: str(c.en)})).filter(c => c.en),
+  world: str(b && b.world), world_ko: str(b && b.world_ko), palette: str(b && b.palette), arc: str(b && b.arc), arc_ko: str(b && b.arc_ko)
+});
+
+$('#btnSplit').onclick = async () => {
+  if (!proj.text.trim()) return toast('본문을 먼저 붙여넣으세요');
+  if (!apiKey()){ toast('Gemini API 키를 넣어 주세요'); return openSettings(); }
+  if (proj.scenes.length && !confirm('장면과 설정표를 새로 만듭니다. 지금 장면과 올린 그림은 사라집니다. 계속할까요?')) return;
+  const b = $('#btnSplit'); b.disabled = true; b.textContent = '나누고 설계하는 중… (30초~1분)';
+  try{
+    const ref = await refPart();
+    const parts = ref ? [ref, {text: splitPrompt(true)}] : [{text: splitPrompt(false)}];
+    const {json, used} = await geminiJSON(parts);
+    const scenes = arr(json.scenes).map(cleanScene).filter(s => s.lines.length).map(s => Object.assign({id: uid()}, s));
+    if (!scenes.length) throw new Error('장면을 받지 못했습니다');
+    await clearScenes();
+    proj.bible = cleanBible(json.bible); proj.scenes = scenes; saveProj();
+    renderAll();
+    $('#stepScenes').scrollIntoView({behavior: 'smooth'});
+    toast(`${scenes.length}개 장면으로 나눴습니다 (${used})`);
+  }catch(e){ toast('실패 — ' + (e.message || e)); }
+  b.disabled = false; b.textContent = '장면 나누고 프롬프트 만들기';
+};
+
+/* 한 장면만 다시 설계 (요청 문장이 있으면 반영) */
+async function redoScene(s, request){
+  if (!apiKey()){ toast('Gemini API 키를 넣어 주세요'); return openSettings(); }
+  const i = proj.scenes.indexOf(s), prev = proj.scenes[i - 1], next = proj.scenes[i + 1];
+  const card = document.querySelector(`.scene[data-id="${s.id}"]`); card && card.classList.add('busy');
+  const prompt = `에세이 그림책의 장면 ${i + 1}/${proj.scenes.length} 하나만 다시 설계해줘. 설정표(bible)는 그대로 지키고, 앞뒤 장면과 이어지게.
+${request ? `\n작가의 요청: ${request}\n` : ''}
+설정표: ${JSON.stringify(proj.bible)}
+앞 장면: ${prev ? JSON.stringify({ko: prev.ko, action: prev.action, shot: prev.shot, light: prev.light}) : '(없음, 첫 장면)'}
+뒤 장면: ${next ? JSON.stringify({ko: next.ko, shot: next.shot}) : '(없음, 마지막 장면)'}
+이 장면의 자막: ${JSON.stringify(s.lines)}
+앞 장면의 유지 상태(keep): ${prev ? JSON.stringify(prev.keep || '') : '(없음)'}
+지금 설계: ${JSON.stringify({ko: s.ko, cast: s.cast, action: s.action, shot: s.shot, light: s.light, link: s.link, keep: s.keep})}
+
+규칙: action/shot/light/link/keep 은 영어, ko 는 한국어. action 에서 cast 생김새는 다시 쓰지 말고 이름으로만. shot 은 앞뒤 장면과 겹치지 않게. keep 은 앞 장면까지 이야기로 바뀌어 이 장면에서도 유지돼야 하는 상태(없으면 빈 문자열). 그림 속에 글자는 없게.
+JSON으로만: {"ko":"","cast":[""],"action":"","shot":"","light":"","link":"","keep":""}`;
+  try{
+    const {json} = await geminiJSON([{text: prompt}]);
+    const c = cleanScene(Object.assign({}, json, {lines: s.lines}));
+    Object.assign(s, {ko: c.ko, cast: c.cast, action: c.action, shot: c.shot, light: c.light, link: i === 0 ? '' : c.link, keep: c.keep});
+    saveProj(); renderScenes();
+    toast(`장면 ${pad(i + 1)} 프롬프트를 새로 만들었습니다`);
+  }catch(e){ toast('실패 — ' + (e.message || e)); card && card.classList.remove('busy'); }
+}
+
+/* ---------- 프롬프트 조립 — 설정표 문장은 모든 장면에 글자 그대로 ---------- */
+// 금지("~하지 마")보다 원하는 모습으로 적는 편이 그림 AI에 잘 먹힌다
+const RULES = 'Square 1:1 composition. A clean, wordless illustration: the whole picture is free of lettering, captions, signs and watermarks.';
+function castLines(ids){
+  const b = proj.bible || {cast: []};
+  const list = ids ? b.cast.filter(c => ids.includes(c.id)) : b.cast;
+  return list.map(c => `- ${c.en}`).join('\n');
+}
+/* 순서: 장면(무엇을·어디서) → 카메라 → 빛 → 고정 인물·사물 → 무대·색 → 유지할 상태 → 이어짐 → 그림체 → 첨부 그림 역할 → 규칙 */
+function scenePrompt(s){
+  const i = proj.scenes.indexOf(s), n = proj.scenes.length, b = proj.bible || {};
+  const cast = castLines(s.cast);
+  return [
+    `Illustration ${i + 1} of ${n} for the same story.`,
+    `THIS SCENE: ${s.action || s.lines.join(' ')}`,
+    s.shot && `CAMERA: ${s.shot}`,
+    s.light && `LIGHT: ${s.light}`,
+    cast && `CHARACTERS AND OBJECTS (identical in every illustration):\n${cast}`,
+    b.world && `SETTING: ${b.world}`,
+    b.palette && `PALETTE: ${b.palette}`,
+    s.keep && `MUST STAY THE SAME FROM EARLIER SCENES: ${s.keep}`,
+    i > 0 && s.link && `CONTINUITY: ${s.link}`,
+    `STYLE: ${curStyle().text.trim()}`,
+    i === 0
+      ? 'REFERENCE: Image 1 (the reference image) defines the character design and painting style. Keep every character visually identical to Image 1.'
+      : 'REFERENCES: Image 1 (the reference image from the start of this chat) defines the character design and painting style: keep every character visually identical to it. If the previous illustration is attached as Image 2, use it only for continuity of place, props and colors, and choose a new composition.',
+    RULES
+  ].filter(Boolean).join('\n\n');
+}
+function startMessage(){
+  const b = proj.bible || {}, n = proj.scenes.length, cast = castLines(null);
+  return [
+    `I'm going to ask you for ${n} illustrations for one short story, one at a time, in this chat. Together they must look like pages of one picture book: the same painting style, the same characters, the same world.`,
+    'Image 1 (attached) is the reference image: it defines the character design and painting style for every illustration.',
+    `STYLE: ${curStyle().text.trim()}`,
+    cast && `CHARACTERS AND OBJECTS (keep exactly like this in every illustration):\n${cast}`,
+    b.world && `SETTING: ${b.world}`,
+    b.palette && `PALETTE: ${b.palette}`,
+    b.arc && `COLOR AND LIGHT ACROSS THE STORY: ${b.arc}`,
+    RULES,
+    'Do not draw anything yet. Just reply "Ready" and wait for the first scene.'
+  ].filter(Boolean).join('\n\n');
+}
+/* 인물 설정 그림: 기준 그림이 없을 때 먼저 그려서 기준 그림으로 쓴다 */
+function sheetPrompt(){
+  const b = proj.bible || {cast: []}, cast = castLines(null);
+  return [
+    'Create a character and prop reference sheet for a picture book, on plain warm off-white paper.',
+    cast && `Show each of these exactly as described:\n${cast}`,
+    'For each person: full-body front view, three-quarter view, side view and back view, plus one close-up of the face with a calm expression, all standing in a neat row with even spacing. For each object: one clear view and one close-up of its details.',
+    b.palette && `PALETTE: ${b.palette}`,
+    `STYLE: ${curStyle().text.trim()}`,
+    'Soft even daylight, no background scenery. Landscape 3:2 composition. A clean, wordless sheet: free of labels, lettering, arrows and watermarks.'
+  ].filter(Boolean).join('\n\n');
+}
+/* 받은 그림을 조금만 고칠 때: 한국어 요청 → "나머지는 그대로, 이것만" 영어 수정 문장 */
+async function editSentence(s, request){
+  if (!apiKey()){ toast('Gemini API 키를 넣어 주세요'); openSettings(); return null; }
+  const prompt = `그림 AI(Gemini) 대화에서 방금 받은 그림을 "다시 뽑지 않고 조금만 고치는" 영어 요청문을 써줘.
+- 첫 문장: 바꾸지 말아야 할 것을 분명히 (Keep the characters, their faces and clothes, the composition, the colors and the painting style exactly the same.)
+- 다음: 작가의 요청을 구체적인 영어로 (위치·크기·방향·색을 분명하게). 요청에 없는 건 건드리지 말 것.
+- 마지막: Return the edited image in the same square 1:1 format.
+- 3~5문장, 영어만.
+장면 설명: ${s.action}
+작가의 요청(한국어): ${request}
+JSON으로만: {"en":""}`;
+  const {json} = await geminiJSON([{text: prompt}]);
+  return str(json.en);
+}
+
+/* ---------- 화면 그리기 ---------- */
+function renderAll(){ renderBible(); renderScenes(); }
+function renderBible(){
+  const b = proj.bible, box = $('#bible');
+  if (!b){ box.innerHTML = '<p class="hint" style="margin:0">장면을 나누면 AI가 설정표를 만듭니다.</p>'; return; }
+  box.innerHTML = `
+    <h3>등장인물·반복되는 사물</h3>
+    ${b.cast.map((c, k) => `<div class="cast-item">
+        <div class="name">${esc(c.ko || c.id)}</div>
+        <div class="ko">${esc(c.ko_desc)}</div>
+        <textarea class="en" data-b="cast" data-k="${k}" aria-label="${esc(c.ko)} 영어 묘사">${esc(c.en)}</textarea>
+      </div>`).join('') || '<p class="hint">반복되는 인물·사물이 없습니다.</p>'}
+    <h3 style="margin-top:16px">장소</h3>
+    <div class="ko">${esc(b.world_ko)}</div>
+    <textarea class="en" data-b="world" aria-label="장소 영어 묘사">${esc(b.world)}</textarea>
+    <h3 style="margin-top:16px">색 (HEX 코드)</h3>
+    <div class="ko">장면마다 색이 흔들리지 않게 색을 코드로 고정합니다</div>
+    <textarea class="en" data-b="palette" aria-label="주요 색">${esc(b.palette)}</textarea>
+    <h3 style="margin-top:16px">빛과 색의 흐름</h3>
+    <div class="ko">${esc(b.arc_ko)}</div>
+    <textarea class="en" data-b="arc" aria-label="빛과 색 흐름">${esc(b.arc)}</textarea>
+    <div class="how" style="margin-top:14px">
+      <b>기준 그림이 없거나 새 인물이 나올 때</b> — 먼저 인물 설정 그림(앞·옆·뒤 모습)을 그려서 1단계의 "기준 그림 올리기"로 넣으세요. 그 뒤 모든 장면이 그 인물을 따라갑니다.
+      <div class="row" style="margin-top:8px"><button class="btn" id="btnCopySheet">인물 설정 그림 프롬프트 복사</button></div>
+    </div>`;
+  $('#btnCopySheet').onclick = async () => { await copyText(sheetPrompt()); toast('복사했습니다. Gemini 앱 새 대화에 붙여넣으세요'); };
+}
+$('#bible').addEventListener('input', e => {
+  const t = e.target, b = proj.bible; if (!b || !t.dataset.b) return;
+  if (t.dataset.b === 'cast') b.cast[+t.dataset.k].en = t.value; else b[t.dataset.b] = t.value;
+  saveProj(); refreshPrompts();
+});
+
+const urls = {};
+function renderScenes(){
+  const has = proj.scenes.length > 0;
+  $('#stepScenes').hidden = $('#exportStep').hidden = !has;
+  const box = $('#scenes');
+  if (!has){ box.innerHTML = ''; renderCheck(); return; }
+  const castName = id => { const c = (proj.bible ? proj.bible.cast : []).find(x => x.id === id); return c ? (c.ko || c.id) : id; };
+  box.innerHTML = proj.scenes.map((s, i) => `
+    <div class="scene" data-id="${s.id}">
+      <div class="top">
+        <span class="no">장면 ${pad(i + 1)}<small>${s.lines.length}줄</small></span>
+        <span class="tools">
+          ${i > 0 ? '<button data-act="merge">↑ 합치기</button>' : ''}
+          <button data-act="cut" title="자막 칸에서 커서가 있는 줄부터 새 장면으로">여기서 나누기</button>
+          <button data-act="del">삭제</button>
+        </span>
+      </div>
+      <textarea class="lines" data-f="lines" aria-label="자막 줄 (한 줄에 하나)">${esc(s.lines.join('\n'))}</textarea>
+      ${s.ko ? `<p class="desc"><b>그림</b>${esc(s.ko)}${s.cast.length ? ` <span style="color:var(--ink-3)">· ${s.cast.map(castName).map(esc).join(', ')}</span>` : ''}</p>` : '<p class="desc">아직 이 장면의 그림 설계가 없습니다. 아래 "다시 만들기"를 누르세요.</p>'}
+      <pre class="prompt" data-prompt>${esc(scenePrompt(s))}</pre>
+      <div class="row" style="margin-top:8px">
+        <button class="btn main" data-act="copy">프롬프트 복사</button>
+      </div>
+      <label class="f">프롬프트 고치기 — 그리기 전에 장면 설계를 바꿀 때</label>
+      <div class="row">
+        <input type="text" data-ask placeholder="예: 더 가까이, 저녁 빛으로" aria-label="프롬프트 고칠 점">
+        <button class="btn ai" data-act="redo">프롬프트 다시 만들기</button>
+      </div>
+      <label class="f">받은 그림 조금 고치기 — 다시 뽑지 말고 같은 대화에서 고칠 때</label>
+      <div class="row">
+        <input type="text" data-edit placeholder="예: 컵을 왼쪽으로, 창밖을 더 밝게" aria-label="그림에서 바꿀 것">
+        <button class="btn ai" data-act="edit">수정 문장 복사</button>
+      </div>
+      <details>
+        <summary>장면 부분 직접 고치기 (영어)</summary>
+        <label class="f">보이는 것 (action)</label><textarea class="en" data-f="action">${esc(s.action)}</textarea>
+        <label class="f">카메라 (shot)</label><input type="text" data-f="shot" value="${esc(s.shot)}">
+        <label class="f">빛 (light)</label><input type="text" data-f="light" value="${esc(s.light)}">
+        <label class="f">앞 장면부터 유지할 상태 (keep)</label><input type="text" data-f="keep" value="${esc(s.keep || '')}" placeholder="예: The pipe is already disassembled on the floor.">
+        ${i > 0 ? `<label class="f">앞 장면과 이어짐 (link)</label><input type="text" data-f="link" value="${esc(s.link)}">` : ''}
+      </details>
+      <div class="pic">
+        <div class="img" data-act="view">그림<br>없음</div>
+        <label class="btn">그림 올리기<input type="file" accept="image/*" data-act="upload" hidden></label>
+        <button class="btn" data-act="down">받기</button>
+      </div>
+    </div>`).join('');
+  proj.scenes.forEach(s => showSceneImg(s.id));
+  renderCheck(); renderExport();
+}
+function refreshPrompts(){
+  document.querySelectorAll('.scene').forEach(el => {
+    const s = proj.scenes.find(x => x.id === el.dataset.id);
+    if (s) el.querySelector('[data-prompt]').textContent = scenePrompt(s);
+  });
+}
+async function showSceneImg(id){
+  const el = document.querySelector(`.scene[data-id="${id}"] .img`); if (!el) return;
+  const b = await idb.get('scene:' + id);
+  if (urls[id]) URL.revokeObjectURL(urls[id]);
+  if (b){ urls[id] = URL.createObjectURL(b); el.style.backgroundImage = `url(${urls[id]})`; el.textContent = ''; }
+  else { delete urls[id]; el.style.backgroundImage = ''; el.innerHTML = '그림<br>없음'; }
+}
+async function clearScenes(){ for (const s of proj.scenes) await idb.del('scene:' + s.id); proj.scenes = []; }
+
+// 원문과 자막 줄을 이었을 때 똑같은지 (공백 무시) — AI가 글을 바꿨는지 확인
+const norm = s => s.replace(/\s+/g, '');
+function renderCheck(){
+  const box = $('#check');
+  if (!proj.scenes.length || !proj.text.trim()){ box.innerHTML = ''; return; }
+  const joined = norm(proj.scenes.map(s => s.lines.join('')).join('')), orig = norm(proj.text);
+  const lines = proj.scenes.reduce((a, s) => a + s.lines.length, 0);
+  if (joined === orig){ box.innerHTML = `<div class="check">자막이 원문과 똑같습니다 · 장면 ${proj.scenes.length}개 · 자막 ${lines}줄</div>`; return; }
+  let i = 0; while (i < joined.length && joined[i] === orig[i]) i++;
+  box.innerHTML = `<div class="check bad">자막이 원문과 다른 곳이 있습니다 — "${esc(orig.slice(Math.max(0, i - 8), i + 12))}" 근처를 확인해 주세요.</div>`;
+}
+
+/* ---------- 장면 카드 동작 ---------- */
+const sceneOf = el => { const c = el.closest('.scene'); return c && proj.scenes.find(s => s.id === c.dataset.id); };
+$('#scenes').addEventListener('input', e => {
+  const t = e.target, s = sceneOf(t), f = t.dataset.f; if (!s || !f) return;
+  if (f === 'lines'){
+    s.lines = t.value.split('\n').map(x => x.trim()).filter(Boolean);
+    t.closest('.scene').querySelector('.no small').textContent = s.lines.length + '줄';
+    renderCheck(); renderExport();
+  } else s[f] = t.value;
+  saveProj();
+  t.closest('.scene').querySelector('[data-prompt]').textContent = scenePrompt(s);
+});
+$('#scenes').addEventListener('keydown', e => {
+  if (e.key === 'Enter' && e.target.matches('[data-ask]')){ e.preventDefault(); e.target.closest('.scene').querySelector('[data-act=redo]').click(); }
+  if (e.key === 'Enter' && e.target.matches('[data-edit]')){ e.preventDefault(); e.target.closest('.scene').querySelector('[data-act=edit]').click(); }
+});
+$('#scenes').addEventListener('change', async e => {
+  if (e.target.dataset.act !== 'upload') return;
+  const s = sceneOf(e.target), f = e.target.files[0]; if (!s || !f) return;
+  await idb.set('scene:' + s.id, f); e.target.value = ''; showSceneImg(s.id); toast('그림을 넣었습니다');
+});
+$('#scenes').addEventListener('click', async e => {
+  const b = e.target.closest('[data-act]'); if (!b || b.tagName === 'INPUT') return;
+  const s = sceneOf(b); if (!s) return;
+  const i = proj.scenes.indexOf(s);
+  switch (b.dataset.act){
+    case 'copy':
+      await copyText(scenePrompt(s)); toast(`장면 ${pad(i + 1)} 프롬프트를 복사했습니다`); break;
+    case 'redo': {
+      const input = b.closest('.scene').querySelector('[data-ask]');
+      redoScene(s, input.value.trim()); break;
+    }
+    case 'edit': {
+      const input = b.closest('.scene').querySelector('[data-edit]'), req = input.value.trim();
+      if (!req) return toast('받은 그림에서 바꿀 것을 적어 주세요');
+      b.disabled = true; b.textContent = '만드는 중…';
+      try{
+        const en = await editSentence(s, req);
+        if (en){ await copyText(en); toast('수정 문장을 복사했습니다. 그림을 받은 같은 대화에 붙여넣으세요'); }
+      }catch(err){ toast('실패 — ' + (err.message || err)); }
+      b.disabled = false; b.textContent = '수정 문장 복사'; break;
+    }
+    case 'merge': {
+      const prev = proj.scenes[i - 1];
+      prev.lines = prev.lines.concat(s.lines);
+      prev.cast = [...new Set(prev.cast.concat(s.cast))];
+      proj.scenes.splice(i, 1); saveProj(); renderScenes();
+      idb.del('scene:' + s.id);
+      toast('합쳤습니다. 합친 장면은 "다시 만들기"로 그림 설계를 새로 받아 보세요'); break;
+    }
+    case 'cut': {
+      const ta = b.closest('.scene').querySelector('textarea.lines');
+      const pos = ta.selectionStart;
+      let at = ta.value.slice(0, pos).split('\n').filter(x => x.trim()).length;
+      if (pos === 0 || pos === ta.value.length) at = Math.floor(s.lines.length / 2);
+      if (at < 1 || at >= s.lines.length) return toast('나눌 줄에 커서를 두고 누르세요');
+      const ns = {id: uid(), lines: s.lines.slice(at), ko: '', cast: s.cast.slice(), action: '', shot: '', light: s.light, link: '', keep: s.keep || ''};
+      s.lines = s.lines.slice(0, at);
+      proj.scenes.splice(i + 1, 0, ns); saveProj(); renderScenes();
+      redoScene(ns, '');   // 새로 생긴 장면은 바로 설계를 받는다
+      break;
+    }
+    case 'del':
+      if (!confirm(`장면 ${pad(i + 1)}을 지울까요? 자막 줄도 같이 빠집니다.`)) return;
+      proj.scenes.splice(i, 1); saveProj(); renderScenes(); idb.del('scene:' + s.id); break;
+    case 'down': {
+      const img = await idb.get('scene:' + s.id); if (!img) return toast('아직 올린 그림이 없습니다');
+      download(img, `${pad(i + 1)}.png`); break;
+    }
+    case 'view':
+      if (!urls[s.id]) return;
+      $('#bigImg').src = urls[s.id]; $('#dlgImg').showModal(); break;
+  }
+});
+$('#bigClose').onclick = () => $('#dlgImg').close();
+$('#btnCopyStart').onclick = async () => { await copyText(startMessage()); toast('시작 메시지를 복사했습니다. 기준 그림과 함께 보내세요'); };
+$('#btnCopyAll').onclick = async () => {
+  const all = proj.scenes.map((s, i) => `===== 장면 ${pad(i + 1)} =====\n${scenePrompt(s)}`).join('\n\n');
+  await copyText(`===== 시작 메시지 =====\n${startMessage()}\n\n${all}`); toast('시작 메시지와 모든 장면 프롬프트를 복사했습니다');
+};
+
+/* ---------- Gemini ---------- */
+const FALLBACK = ['gemini-2.5-flash', 'gemini-2.5-flash-lite', 'gemini-2.0-flash'];
+function parseJSON(t){
+  const clean = t.replace(/```json|```/g, '').trim();
+  try{ return JSON.parse(clean); }catch(e){
+    const a = clean.indexOf('{'), b = clean.lastIndexOf('}');
+    if (a >= 0 && b > a) return JSON.parse(clean.slice(a, b + 1));
+    throw new Error('AI 응답을 읽지 못했습니다');
+  }
+}
+async function geminiJSON(parts){
+  const main = memoCfg().model || 'gemini-2.5-flash';
+  const chain = [main, ...FALLBACK.filter(x => x !== main).slice(0, 2)];
+  let lastErr = null;
+  for (const model of chain){
+    const gen = {responseMimeType: 'application/json', maxOutputTokens: 16384};
+    if (!/^gemini-3/.test(model)) gen.temperature = 0.4;   // 제미나이 3 은 온도를 지정하지 않는다 (낮추면 반복에 빠짐)
+    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`, {
+      method: 'POST', headers: {'Content-Type': 'application/json', 'x-goog-api-key': apiKey()},
+      body: JSON.stringify({contents: [{role: 'user', parts}], generationConfig: gen})
+    });
+    if (res.ok){
+      const d = await res.json();
+      const txt = ((d.candidates && d.candidates[0] && d.candidates[0].content && d.candidates[0].content.parts) || []).map(p => p.text || '').join('');
+      if (!txt) throw new Error('AI가 빈 응답을 보냈습니다');
+      return {json: parseJSON(txt), used: model};
+    }
+    let msg = ''; try{ msg = (await res.json()).error.message; }catch(e){}
+    lastErr = new Error(`${res.status} (${model}) ${String(msg).slice(0, 120)}`);
+    if (![404, 429, 500, 503].includes(res.status)) throw lastErr;
+  }
+  throw lastErr;
+}
+
+/* ---------- 내보내기 ---------- */
+function scriptCode(){
+  const parts = proj.scenes.map((s, i) => `    {\n      image: "images/${pad(i + 1)}.png",\n      lines: [\n${s.lines.map(l => `        ${JSON.stringify(l)},`).join('\n')}\n      ],\n    },`).join('\n');
+  return `  title: ${JSON.stringify((proj.title || '제목').trim())},\n  parts: [\n${parts}\n  ],`;
+}
+function renderExport(){ if (proj.scenes.length) $('#scriptOut').textContent = scriptCode(); }
+$('#btnCopyScript').onclick = async () => { await copyText(scriptCode()); toast('대본 코드를 복사했습니다'); };
+$('#btnTimeline').onclick = () => {
+  const tl = {title: proj.title, style: curStyle().text, bible: proj.bible,
+    scenes: proj.scenes.map((s, i) => ({image: `images/${pad(i + 1)}.png`, lines: s.lines, ko: s.ko, prompt: scenePrompt(s)}))};
+  download(new Blob([JSON.stringify(tl, null, 2)], {type: 'application/json'}), 'timeline.json');
+};
+$('#btnDownAll').onclick = async () => {
+  let n = 0;
+  for (let i = 0; i < proj.scenes.length; i++){
+    const b = await idb.get('scene:' + proj.scenes[i].id); if (!b) continue;
+    download(b, `${pad(i + 1)}.png`); n++;
+    await new Promise(r => setTimeout(r, 400));   // 연달아 받으면 브라우저가 막을 수 있어 조금씩 띄운다
+  }
+  toast(n ? `그림 ${n}장을 받았습니다` : '받을 그림이 없습니다. 각 장면에 그림을 먼저 올려 주세요');
+};
+function download(blob, name){
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name;
+  document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+}
+async function copyText(t){
+  try{ await navigator.clipboard.writeText(t); }
+  catch(e){ const ta = document.createElement('textarea'); ta.value = t; ta.style.cssText = 'position:fixed;top:0;left:0;opacity:0'; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); ta.remove(); }
+}
+
+/* ---------- 키 설정 ---------- */
+function openSettings(){ $('#cfgKey').value = apiKey(); $('#dlgSettings').showModal(); }
+$('#btnSettings').onclick = openSettings;
+$('#cfgCancel').onclick = () => $('#dlgSettings').close();
+$('#cfgSave').onclick = () => {
+  const c = memoCfg(); c.key = $('#cfgKey').value.trim(); store.set('nuema_cfg_v1', c);
+  $('#dlgSettings').close(); toast('저장했습니다');
+};
+
+renderStyles();
+fillText();
+renderAll();
+checkInbox();
+</script>
+</body>
+</html>
