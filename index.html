@@ -56,6 +56,8 @@ header h1{font-family:var(--serif);font-weight:400;font-size:1.05rem;margin:0;le
 .rec-btn:active{background:var(--paper-3)}
 .rec-btn .dot{width:64px;height:64px;border-radius:50%;background:var(--shu);transition:border-radius .2s,transform .2s}
 .recording .rec-btn .dot{border-radius:10px;transform:scale(.7)}   /* 녹음 중엔 멈춤 네모 */
+/* 빨간 점은 원의 정가운데, 글씨는 그 아래에 매단다 (둘을 한 덩어리로 가운데 두면 점이 위로 떠 보임). text-indent 는 자간 때문에 왼쪽으로 쏠리는 것 보정 */
+.rec-btn #recLabel{position:absolute;left:0;right:0;top:calc(50% + 40px);text-align:center;text-indent:.1em;line-height:1.4}
 .timer{margin-top:22px;font-variant-numeric:tabular-nums;color:var(--ink-2);font-size:.88rem;min-height:1.5em;letter-spacing:.02em;text-align:center}
 .sub-actions{margin-top:4px}
 .link-btn{background:none;border:none;color:var(--ink-2);text-decoration:underline;text-decoration-color:var(--line-2);text-underline-offset:5px;font-size:.85rem;padding:6px;letter-spacing:.04em}
