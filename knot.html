@@ -314,6 +314,7 @@ ${hasRef ? '\n첨부한 그림은 기준 그림이야. 그림 속 인물이 이 
 - cast: 두 장면 이상 나오는 인물과 중요한 사물. id(영문 소문자), ko(한국어 이름), ko_desc(한국어 설명 한 줄), en(영어 고정 묘사 1~2문장: 나이·체형·머리·얼굴·옷과 색 / 사물은 재질·색·크기·특징. 장면마다 달라지지 않는 것만. 옷·머리·사물의 주요 색은 색 이름 뒤에 HEX 코드를 붙여, 예: soft blue knit sweater (#5B7FA6)).
 - world: 이야기의 주 무대 (영어 1~2문장: 공간 구조, 재질, 소품, 기본 색) / world_ko: 한국어 한 줄
 - palette: 이야기 전체의 주요 색 4~6개를 영어 한 줄로, 색 이름과 HEX 코드 (예: dusty blue #7C93AE, warm amber #E3A857, ...)
+- scale: 크기 기준 (영어 2~4문장). 그림 AI가 장면마다 사물 크기를 다르게 그리지 않도록, 중요한 사물마다 실제 크기(cm)와 사람 몸에 빗댄 크기(손가락·손바닥·손목·팔뚝)를 함께, 그리고 사물끼리의 크기 관계를 적어. 예: The drain brush is about 40 cm long and as thin as a pencil, roughly the length of the woman's forearm. The drain pipe is about 4 cm wide, as thick as her wrist; the brush fits loosely inside it. / scale_ko: 한국어 한 줄
 - arc: 이야기 흐름에 따라 빛과 색이 어떻게 변하는지 (영어 한 문장, 예: from cold blue dawn to warm golden afternoon) / arc_ko: 한국어 한 줄
 
 [장면마다]
@@ -328,7 +329,7 @@ ${hasRef ? '\n첨부한 그림은 기준 그림이야. 그림 속 인물이 이 
 - 감정은 과장된 표정보다 빛·공간·사물로. 그림 속에 글자는 없게.
 
 JSON으로만 답해:
-{"bible":{"cast":[{"id":"","ko":"","ko_desc":"","en":""}],"world":"","world_ko":"","palette":"","arc":"","arc_ko":""},
+{"bible":{"cast":[{"id":"","ko":"","ko_desc":"","en":""}],"world":"","world_ko":"","palette":"","scale":"","scale_ko":"","arc":"","arc_ko":""},
  "scenes":[{"lines":[""],"ko":"","cast":[""],"action":"","shot":"","light":"","link":"","keep":""}]}
 
 제목: ${proj.title || '(없음)'}
@@ -349,8 +350,28 @@ const cleanScene = s => ({
 });
 const cleanBible = b => ({
   cast: arr(b && b.cast).map(c => ({id: str(c.id) || uid(), ko: str(c.ko), ko_desc: str(c.ko_desc), en: str(c.en)})).filter(c => c.en),
-  world: str(b && b.world), world_ko: str(b && b.world_ko), palette: str(b && b.palette), arc: str(b && b.arc), arc_ko: str(b && b.arc_ko)
+  world: str(b && b.world), world_ko: str(b && b.world_ko), palette: str(b && b.palette), scale: str(b && b.scale), scale_ko: str(b && b.scale_ko), arc: str(b && b.arc), arc_ko: str(b && b.arc_ko)
 });
+
+/* 크기 기준만 따로 만들기 — 이미 장면을 나눈 작업에 나중에 채울 때 */
+async function fillScale(request){
+  if (!apiKey()){ toast('Gemini API 키를 넣어 주세요'); return openSettings(); }
+  const b = proj.bible; if (!b) return;
+  const btn = $('#btnScale'); btn.disabled = true; btn.textContent = '만드는 중…';
+  const prompt = `그림책 이야기 설정표에 "크기 기준(scale)"을 써줘. 그림 AI가 장면마다 사물 크기를 다르게 그리는 문제를 막기 위한 거야.
+- 중요한 사물마다 실제 크기(cm)와 사람 몸에 빗댄 크기(손가락·손바닥·손목·팔뚝)를 함께, 그리고 사물끼리의 크기 관계(무엇이 무엇 안에 들어가는지, 어느 쪽이 더 굵은지)를 적어.
+- 영어 2~4문장. 이야기 내용에 맞게 현실적인 크기로.
+${b.scale ? `지금 크기 기준: ${b.scale}\n` : ''}${request ? `작가의 요청: ${request}\n` : ''}
+인물·사물: ${JSON.stringify(b.cast.map(c => c.en))}
+장소: ${b.world}
+본문 일부: ${proj.text.slice(0, 1500)}
+JSON으로만: {"scale":"","scale_ko":""}`;
+  try{
+    const {json} = await geminiJSON([{text: prompt}]);
+    b.scale = str(json.scale); b.scale_ko = str(json.scale_ko); saveProj(); renderBible(); refreshPrompts();
+    toast('크기 기준을 넣었습니다. 모든 장면 프롬프트에 들어갔어요');
+  }catch(e){ toast('실패 — ' + (e.message || e)); btn.disabled = false; btn.textContent = '크기 기준 채우기'; }
+}
 
 $('#btnSplit').onclick = async () => {
   if (!proj.text.trim()) return toast('본문을 먼저 붙여넣으세요');
@@ -416,6 +437,7 @@ function scenePrompt(s){
     s.light && `LIGHT: ${s.light}`,
     cast && `CHARACTERS AND OBJECTS (identical in every illustration):\n${cast}`,
     b.world && `SETTING: ${b.world}`,
+    b.scale && `SIZE AND SCALE (keep the same in every illustration): ${b.scale}`,
     b.palette && `PALETTE: ${b.palette}`,
     s.keep && `MUST STAY THE SAME FROM EARLIER SCENES: ${s.keep}`,
     i > 0 && s.link && `CONTINUITY: ${s.link}`,
@@ -434,6 +456,7 @@ function startMessage(){
     `STYLE: ${curStyle().text.trim()}`,
     cast && `CHARACTERS AND OBJECTS (keep exactly like this in every illustration):\n${cast}`,
     b.world && `SETTING: ${b.world}`,
+    b.scale && `SIZE AND SCALE (keep the same in every illustration): ${b.scale}`,
     b.palette && `PALETTE: ${b.palette}`,
     b.arc && `COLOR AND LIGHT ACROSS THE STORY: ${b.arc}`,
     RULES,
@@ -446,7 +469,8 @@ function sheetPrompt(){
   return [
     'Create a character and prop reference sheet for a picture book, on plain warm off-white paper.',
     cast && `Show each of these exactly as described:\n${cast}`,
-    'For each person: full-body front view, three-quarter view, side view and back view, plus one close-up of the face with a calm expression, all standing in a neat row with even spacing. For each object: one clear view and one close-up of its details.',
+    'For each person: full-body front view, three-quarter view, side view and back view, plus one close-up of the face with a calm expression, all standing in a neat row with even spacing. For each object: one clear view and one close-up of its details. Draw all objects side by side at the same scale, with a hand holding each small object so its real size is obvious.',
+    b.scale && `SIZE AND SCALE: ${b.scale}`,
     b.palette && `PALETTE: ${b.palette}`,
     `STYLE: ${curStyle().text.trim()}`,
     'Soft even daylight, no background scenery. Landscape 3:2 composition. A clean, wordless sheet: free of labels, lettering, arrows and watermarks.'
@@ -482,6 +506,13 @@ function renderBible(){
     <h3 style="margin-top:16px">장소</h3>
     <div class="ko">${esc(b.world_ko)}</div>
     <textarea class="en" data-b="world" aria-label="장소 영어 묘사">${esc(b.world)}</textarea>
+    <h3 style="margin-top:16px">크기 기준</h3>
+    <div class="ko">${esc(b.scale_ko || '사물이 장면마다 커졌다 작아졌다 하지 않게, 실제 크기와 손·손목·팔뚝에 빗댄 크기로 고정합니다')}</div>
+    <textarea class="en" data-b="scale" aria-label="크기 기준" placeholder="예: The drain brush is about 40 cm long and as thin as a pencil...">${esc(b.scale || '')}</textarea>
+    <div class="row" style="margin-top:6px">
+      <input type="text" id="scaleAsk" placeholder="예: 브러시 솔은 엄지손가락 굵기로" aria-label="크기 요청">
+      <button class="btn ai" id="btnScale">${b.scale ? '크기 기준 다시 만들기' : '크기 기준 채우기'}</button>
+    </div>
     <h3 style="margin-top:16px">색 (HEX 코드)</h3>
     <div class="ko">장면마다 색이 흔들리지 않게 색을 코드로 고정합니다</div>
     <textarea class="en" data-b="palette" aria-label="주요 색">${esc(b.palette)}</textarea>
@@ -492,6 +523,7 @@ function renderBible(){
       <b>기준 그림이 없거나 새 인물이 나올 때</b> — 먼저 인물 설정 그림(앞·옆·뒤 모습)을 그려서 1단계의 "기준 그림 올리기"로 넣으세요. 그 뒤 모든 장면이 그 인물을 따라갑니다.
       <div class="row" style="margin-top:8px"><button class="btn" id="btnCopySheet">인물 설정 그림 프롬프트 복사</button></div>
     </div>`;
+  $('#btnScale').onclick = () => fillScale($('#scaleAsk').value.trim());
   $('#btnCopySheet').onclick = async () => { await copyText(sheetPrompt()); toast('복사했습니다. Gemini 앱 새 대화에 붙여넣으세요'); };
 }
 $('#bible').addEventListener('input', e => {
