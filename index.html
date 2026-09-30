@@ -197,6 +197,7 @@ body.adding .toast{bottom:calc(136px + env(safe-area-inset-bottom))}
 .tabs button{background:none;border:none;border-bottom:1px solid transparent;margin-bottom:-1px;padding:6px 0;font-size:.86rem;color:var(--ink-3);letter-spacing:.06em}
 .tabs button[aria-selected="true"]{color:var(--ink);border-bottom-color:var(--ink)}
 #knotFrame{display:block;width:100%;border:0;background:var(--paper)}
+#knotFrame[hidden]{display:none}   /* 위 display:block 이 hidden 을 이기지 않게 — 메모 탭 아래로 매듭짓기가 이어져 보이던 문제 */
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 </style>
 </head>
