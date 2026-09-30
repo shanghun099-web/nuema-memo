@@ -87,6 +87,21 @@ header h1{font-family:var(--serif);font-weight:400;font-size:1.05rem;margin:0;le
 .item-title{font-family:var(--serif);font-size:1.12rem;font-weight:400;margin:6px 0 4px;line-height:1.5;color:var(--ink)}
 .item-sub{font-size:.86rem;color:var(--ink-2);line-height:1.65;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
 .state-err{color:var(--shu)}
+/* 고르기 — 메모 왼쪽에 동그라미, 고른 건 주홍으로 채운다 */
+.item.pickable button{position:relative;padding-left:34px}
+.item.pickable button::before{content:"";position:absolute;left:2px;top:24px;width:18px;height:18px;border:1px solid var(--ink-3);border-radius:50%;box-sizing:border-box}
+.item.picked button::before{background:var(--shu);border-color:var(--shu);box-shadow:inset 0 0 0 3px var(--paper)}
+.item.nopick{opacity:.35}
+.pick-bar{position:fixed;left:0;right:0;bottom:0;z-index:25;display:flex;align-items:center;justify-content:center;gap:8px;flex-wrap:wrap;
+  background:var(--paper-2);border-top:1px solid var(--line-2);padding:12px 10px calc(12px + env(safe-area-inset-bottom))}
+.pick-bar[hidden]{display:none}
+.pick-bar .n{font-size:.8rem;color:var(--ink-2);white-space:nowrap}
+.pick-bar button{border:1px solid var(--line-2);background:var(--paper);border-radius:999px;padding:8px 11px;font-size:.82rem;white-space:nowrap}
+.pick-bar button.main{background:var(--ink);color:var(--paper);border-color:var(--ink)}
+.pick-bar button:disabled{opacity:.4}
+body.picking .list{padding-bottom:140px}
+body.picking .toast{bottom:calc(92px + env(safe-area-inset-bottom))}
+.sheet ol.steps{padding-left:20px;margin:14px 0 0;font-size:.92rem;line-height:1.85;color:var(--ink-2)}
 .empty{padding:64px 8px;text-align:center;color:var(--ink-3);font-family:var(--serif);font-size:.95rem;letter-spacing:.04em}
 
 /* 시트 — 종이 한 장이 올라온다 */
@@ -235,7 +250,7 @@ body.adding .toast{bottom:calc(136px + env(safe-area-inset-bottom))}
   <div class="filters" id="filters"></div>
   <div class="toolbar">
     <input id="search" type="search" placeholder="메모 검색">
-    <button class="btn" id="btnDeck">모아서 PPT</button>
+    <button class="btn" id="btnDeck">고르기</button>
   </div>
   <ul class="list" id="list"></ul>
   </div>
@@ -245,6 +260,12 @@ body.adding .toast{bottom:calc(136px + env(safe-area-inset-bottom))}
 <div class="sheet-bg" id="sheetBg"></div>
 <div class="sheet" id="sheet" role="dialog" aria-modal="true" tabindex="-1"><div class="grip"></div><div id="sheetBody"></div></div>
 <button class="add-stop-bar" id="addStopBar" type="button" hidden aria-label="이어서 말하기 멈추기"><span class="sq"></span><span>멈추기</span><span class="t" id="addStopTime">0:00</span></button>
+<div class="pick-bar" id="pickBar" hidden>
+  <span class="n" id="pickN">0개 고름</span>
+  <button type="button" id="pickAll">전체</button>
+  <button type="button" class="main" id="pickPpt">📄 PPT</button>
+  <button type="button" class="main" id="pickNlm">📚 NotebookLM</button>
+</div>
 <div class="toast" id="toast"></div>
 <input type="file" id="importFile" accept="application/json" hidden>
 
@@ -817,14 +838,23 @@ function renderList(){
     } else {
       title = '정리하는 중…'; sub = m.kind === 'voice' ? `${m.dur}초 녹음` : (m.text || '').slice(0, 60);
     }
-    return `<li class="item"><button data-id="${m.id}">
+    const pc = !pick ? '' : m.status === 'done' ? ` pickable${pick.has(m.id) ? ' picked' : ''}` : ' nopick';
+    return `<li class="item${pc}"><button data-id="${m.id}"${pick && m.status === 'done' ? ` aria-pressed="${pick.has(m.id)}"` : ''}>
       <div class="meta"><span class="cat-dot" style="background:${color}"></span>${esc(cat)} ${fmtDate(m.created)}${m.kind === 'voice' ? ' 🎙' : ' ✎'}${doneAdds(m).length ? ` · 이어서 ${doneAdds(m).length}` : ''}</div>
       <div class="item-title">${esc(title)}</div>
       <div class="item-sub">${m.status === 'error' ? sub : esc(sub)}</div>
     </button></li>`;
   }).join('');
 }
-$('#list').onclick = e => { const b = e.target.closest('button[data-id]'); if (b) openDetail(b.dataset.id); };
+$('#list').onclick = e => {
+  const b = e.target.closest('button[data-id]'); if (!b) return;
+  if (!pick) return openDetail(b.dataset.id);
+  const m = memos.find(x => x.id === b.dataset.id);
+  if (!m || m.status !== 'done'){ toast('정리가 끝난 메모만 고를 수 있어요'); return; }
+  pick.has(m.id) ? pick.delete(m.id) : pick.add(m.id);
+  b.closest('.item').classList.toggle('picked', pick.has(m.id)); b.setAttribute('aria-pressed', pick.has(m.id));
+  updatePickBar();
+};
 function render(){ renderReview(); renderFilters(); renderList(); }
 
 /* ---------- 시트 ---------- */
@@ -986,6 +1016,9 @@ $('#sheetBody').onclick = e => {
   const b = e.target.closest('[data-act]'); if (!b) return;
   const act = b.dataset.act;
   if (act === 'close') return closeSheet();
+  if (act === 'nlmcopy') return copyText(nlmSrc).then(ok => toast(ok ? '자료를 다시 복사했습니다' : '복사에 실패했습니다'));
+  if (act === 'nlmprompt') return copyText(cfg.deckPrompt || DEFAULT_DECK_PROMPT).then(ok => toast(ok ? '요청문을 복사했습니다' : '복사에 실패했습니다'));
+  if (act === 'nlmfile') return downloadText(nlmSrc, `누에마 메모 모음 ${fmtDate(Date.now())}.txt`);
   if (act === 'addvoice'){ if (isRecording()){ toast('지금 녹음 중입니다. 먼저 멈춰 주세요'); return; } return startRec(id); }
   if (act === 'addstop') return stopRec();
   if (act === 'addtext') return openAddText(id);
@@ -1272,11 +1305,85 @@ function loadPptx(){
     document.head.appendChild(s);
   });
 }
-$('#btnDeck').onclick = () => {
+/* ---------- 고르기: 메모를 골라 PPT(앱에서, 글자 수정 가능) / NotebookLM(붙여넣기 두 번, 더 세련됨) ---------- */
+let pick = null;   // 고르는 중이면 고른 메모 id 모음
+function setPick(on){
+  pick = on ? new Set() : null;
+  document.body.classList.toggle('picking', on);
+  $('#btnDeck').textContent = on ? '고르기 취소' : '고르기';
+  $('#pickBar').hidden = !on;
+  renderList(); updatePickBar();
+}
+function updatePickBar(){
+  if (!pick) return;
+  $('#pickN').textContent = `${pick.size}개 고름`;
+  $('#pickPpt').disabled = $('#pickNlm').disabled = !pick.size;
+}
+const pickedMemos = () => memos.filter(m => pick && pick.has(m.id) && m.status === 'done');
+$('#btnDeck').onclick = () => setPick(!pick);
+$('#pickAll').onclick = () => {
   const list = visibleMemos().filter(m => m.status === 'done');
-  if (!list.length){ toast('정리된 메모가 없습니다'); return; }
-  makeDeck(list, `아이디어 모음 ${filter === '전체' ? '' : filter}`.trim());
+  const all = list.length && list.every(m => pick.has(m.id));
+  list.forEach(m => all ? pick.delete(m.id) : pick.add(m.id));
+  renderList(); updatePickBar();
 };
+$('#pickPpt').onclick = async () => {
+  const list = pickedMemos(); if (!list.length) return;
+  await makeDeck(list, list.length === 1 ? (list[0].r.title || '메모').slice(0, 30) : `누에마 메모 ${list.length}개 ${fmtDate(Date.now())}`);
+  setPick(false);
+};
+$('#pickNlm').onclick = () => {
+  const list = pickedMemos(); if (!list.length) return;
+  openNlm(list); setPick(false);
+};
+
+/* NotebookLM 은 개인 계정용 API 가 없어서, 고른 메모를 자료 하나로 묶어 복사해 주고 붙여넣는 순서를 안내한다 */
+const DEFAULT_DECK_PROMPT = `누에마 작가의 아이디어 노트를 슬라이드로 만들어 주세요.
+- 톤: 차분하고 따뜻하게. 종이와 먹 느낌, 여백이 넉넉하고 색은 절제.
+- 메모마다 1~2장, 슬라이드 하나에 메시지 하나.
+- '내가 한 말'에 있는 작가의 문장을 그대로 인용해서 작가의 목소리를 살려 주세요. 자료에 없는 내용은 지어내지 마세요.
+- 마지막 장: 메모들을 관통하는 흐름과 다음에 써 볼 글감.
+- 한국어로.`;
+let nlmSrc = '';
+function nlmSource(list){
+  const li = a => arr(a).map(x => '- ' + x).join('\n') || '- 없음';
+  return `# 누에마 메모 모음 (${fmtDate(Date.now())})\n\n작가 '누에마'의 아이디어 메모 ${list.length}개입니다. '내가 한 말'은 작가가 직접 말하거나 쓴 원문입니다.\n\n`
+    + list.map((m, i) => {
+      const r = m.r;
+      return `---\n\n## ${i + 1}. ${r.title || '제목 없음'}\n${r.category} · ${stageOf(m).n} · ${fmtDate(m.created)}${arr(r.tags).length ? ' · ' + r.tags.join(', ') : ''}\n\n### 내가 한 말\n${fullText(m)}\n\n### 핵심\n${li(r.points)}${r.draft ? `\n\n### 초안 (AI가 쓴 것)\n${r.draft}` : ''}`;
+    }).join('\n\n');
+}
+function openNlm(list){
+  nlmSrc = nlmSource(list);
+  copyText(nlmSrc).then(ok => toast(ok ? `메모 ${list.length}개를 자료로 묶어 복사했습니다` : '복사에 실패했습니다. "자료 다시 복사"를 눌러 주세요'));
+  showSheet(`<h2>NotebookLM으로 슬라이드</h2>
+    <p class="hint">고른 메모 ${list.length}개를 자료 하나로 묶어 <b>복사해 두었습니다</b>.</p>
+    <ol class="steps">
+      <li><b>NotebookLM 열기</b> → 새 노트북 만들기</li>
+      <li>소스 추가 → <b>복사된 텍스트</b>에 붙여넣기<br><span class="hint">붙여넣기가 불편하면 "파일로 받기" 후 그 파일을 올려도 됩니다</span></li>
+      <li>스튜디오 → <b>슬라이드 자료</b>의 맞춤설정(연필)에 <b>요청문</b>을 붙여넣고 만들기</li>
+      <li>완성되면 점 3개 메뉴 → <b>PowerPoint로 다운로드</b></li>
+    </ol>
+    <p class="hint">NotebookLM 슬라이드는 장마다 그림으로 들어가서 파워포인트에서 글자를 고칠 수 없습니다. 글자를 고칠 PPT가 필요하면 "📄 PPT"를 쓰세요.</p>
+    <label class="field">슬라이드 요청문 — 고쳐 두면 다음에도 이대로
+      <textarea id="deckPrompt" rows="7">${esc(cfg.deckPrompt || DEFAULT_DECK_PROMPT)}</textarea></label>
+    <div class="actions">
+      <a class="btn primary" href="https://notebooklm.google.com/" target="_blank" rel="noopener">NotebookLM 열기</a>
+      <button class="btn" data-act="nlmprompt">요청문 복사</button>
+      <button class="btn" data-act="nlmcopy">자료 다시 복사</button>
+      <button class="btn" data-act="nlmfile">파일로 받기</button>
+      <button class="btn" data-act="close">닫기</button>
+    </div>`);
+}
+$('#sheetBody').addEventListener('input', e => {
+  if (e.target.id === 'deckPrompt'){ cfg.deckPrompt = e.target.value; store.set('nuema_cfg_v1', cfg); }
+});
+function downloadText(text, name){
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([text], {type: 'text/plain;charset=utf-8'}));
+  a.download = name.replace(/[\\/:*?"<>|]/g, '');
+  document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+}
 
 async function makeDeck(list, name){
   try{ toast('PPT 만드는 중…'); await loadPptx(); }catch(e){ toast(e.message); return; }
@@ -1334,8 +1441,13 @@ async function makeDeck(list, name){
       s = P.addSlide(); head(s, r.title || '제목 없음', `${r.category}  |  ${fmtDate(m.created)}`, hex(r.category));
       s.addText('핵심', {x:0.72, y:1.4, w:4.2, h:0.4, fontFace:F, fontSize:14, bold:true, color:DIM});
       s.addText(bullets(r.points, SILK), {x:0.72, y:1.85, w:4.2, h:3.4, fontFace:F, fontSize:14, valign:'top', fit:'shrink', paraSpaceAfter:6});
-      s.addText('AI 제안', {x:5.2, y:1.4, w:4.3, h:0.4, fontFace:F, fontSize:14, bold:true, color:AI});
-      s.addText(bullets(r.extend, SILK), {x:5.2, y:1.85, w:4.3, h:3.4, fontFace:F, fontSize:14, valign:'top', fit:'shrink', paraSpaceAfter:6});
+      if (hasOpinion(r) && arr(r.extend).length){
+        s.addText('AI 제안', {x:5.2, y:1.4, w:4.3, h:0.4, fontFace:F, fontSize:14, bold:true, color:AI});
+        s.addText(bullets(r.extend, SILK), {x:5.2, y:1.85, w:4.3, h:3.4, fontFace:F, fontSize:14, valign:'top', fit:'shrink', paraSpaceAfter:6});
+      } else {
+        s.addText('내가 한 말', {x:5.2, y:1.4, w:4.3, h:0.4, fontFace:F, fontSize:14, bold:true, color:DIM});
+        s.addText(fullText(m), {x:5.2, y:1.85, w:4.3, h:3.4, fontFace:F, fontSize:12, color:SILK, valign:'top', fit:'shrink', lineSpacingMultiple:1.3});
+      }
     });
   }
   try{
