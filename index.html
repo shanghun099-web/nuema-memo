@@ -305,6 +305,26 @@ body.picking .toast{bottom:calc(130px + env(safe-area-inset-bottom))}
 .item.picked button::before{background:var(--shu);border-color:var(--shu);box-shadow:none;
   background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20'%3E%3Cpath d='M5 10.5l3.2 3L15 6.5' fill='none' stroke='white' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");background-size:100%}
 .empty{border:none}
+/* 자동으로 붙은 것 확인 — 목록 위 줄, 메모 상세의 확인 칸, 옮길 메모 고르기 */
+.join-strip{display:flex;justify-content:space-between;align-items:center;width:100%;margin:4px 0 14px;padding:12px 18px;border:1px solid var(--shu);
+  border-radius:14px;background:#F3D9CC;color:#8E2F16;font-size:.95rem;text-align:left}
+.join-strip[hidden]{display:none}
+.join-strip:active{background:#EDCBBA}
+.jc-badge{display:inline-block;font-family:var(--sans);font-size:.72rem;font-weight:600;line-height:1.5;padding:0 8px;border-radius:999px;background:#F3D9CC;color:#8E2F16;vertical-align:middle}
+.join-check{margin-top:22px;border:1px solid var(--shu);border-radius:14px;background:#FBF0EA;padding:14px 16px}
+.jc-head{font-size:.88rem;font-weight:600;color:#8E2F16}
+.jc-said{font-family:var(--serif);margin:8px 0 0;color:var(--ink)}
+.jc-lab{font-size:.75rem;color:var(--ink-3);margin-top:10px;letter-spacing:.06em}
+.join-check ul{margin:4px 0 0}
+.jc-acts{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:14px}
+.jc-acts button{border:1px solid var(--line-2);background:var(--paper-2);border-radius:999px;padding:9px 10px;font-size:.88rem;color:var(--ink)}
+.jc-acts .jc-ok{grid-column:1/-1;background:var(--shu);border-color:var(--shu);color:#FFF8F0;font-weight:500}
+.move-search{margin:14px 0 8px}
+.move-search input{flex:1;border:none;background:none;padding:12px 0;font-size:.95rem;outline:none}
+.move-list{display:flex;flex-direction:column;gap:8px;max-height:52vh;overflow:auto}
+.move-item{display:flex;flex-direction:column;align-items:flex-start;text-align:left;border:1px solid var(--line);border-radius:12px;background:var(--paper-2);padding:10px 14px}
+.move-item[hidden]{display:none}
+.mv-title{font-weight:700;margin-top:2px}
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 </style>
 </head>
@@ -337,6 +357,7 @@ body.picking .toast{bottom:calc(130px + env(safe-area-inset-bottom))}
     <div class="sub-actions"><button class="pill-btn" id="btnText">글로 적기<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16v4zM13.5 6.5l4 4"/></svg></button></div>
   </section>
 
+  <button class="join-strip" id="joinStrip" type="button" hidden></button>
   <section class="review" id="review" aria-label="다시 볼 메모" hidden></section>
   <div class="filters" id="filters"></div>
   <div class="toolbar">
@@ -671,7 +692,8 @@ function buildAddPrompt(m, a){
 {
   "transcript": "${voice ? '이번에 덧붙인 말만 그대로 받아쓰기. 음, 어 같은 군말만 빼고 내용은 더하지도 빼지도 않는다' : '이번에 덧붙인 글을 그대로'}",
   "points": ["처음 메모와 덧붙인 말 전체에서, 원문에 실제로 있는 핵심 2~6개"],
-  "tags": ["전체를 보고 키워드 2~5개"]
+  "tags": ["전체를 보고 키워드 2~5개"],
+  "added": ["points 중 이번에 덧붙인 말에서 새로 나온 핵심만 1~3개. 처음 메모에 이미 있던 내용이면 넣지 않는다"]
 }
 
 규칙:
@@ -864,6 +886,7 @@ async function processAdd(id, aid){
       if (arr(json.points).length) m.r.points = arr(json.points);
       if (arr(json.tags).length) m.r.tags = arr(json.tags);
     }
+    a.newPts = arr(json.added);   // 확인 칸에 "핵심에 새로 들어간 것"으로 보여 준다
     if (!m.stage || m.stage === 'seed') m.stage = 'sprout';
     m.next = Date.now() + 3 * DAY;
   }catch(e){
@@ -873,6 +896,7 @@ async function processAdd(id, aid){
   }
   saveMemos(); render();
   if (openId === id) openDetail(id);
+  if (checkOpen && a.check && allChecks().length) openChecks();
   if (a.status === 'done' && m.gdoc && cfg.gdocAuto !== false && gdocReady()) sendToDocs(m, true);
 }
 /* ---------- 같은 얘기 자동으로 이어 붙이기 ----------
@@ -885,7 +909,7 @@ function matchOf(p, cands){
 }
 async function joinPieces(m, pieces, cands, used){
   const blob = await idb.get(m.id).catch(() => null);
-  const split = pieces.length > 1, rec = {orig: {id: m.id, created: m.created, dur: m.dur}, made: [], adds: []};
+  const split = pieces.length > 1;
   const fresh = [], jobs = [], said = [];
   for (let i = 0; i < pieces.length; i++){
     const p = pieces[i], key = i ? `${m.id}_${i}` : m.id, t = matchOf(p, cands), src = String(p.transcript).trim();
@@ -893,9 +917,9 @@ async function joinPieces(m, pieces, cands, used){
     if (i && blob){ try{ await idb.put(key, blob); }catch(e){ has = false; } }
     if (t){
       t.adds = arr(t.adds);
-      t.adds.push(Object.assign({id: key, kind: 'voice', at: m.created, dur: m.dur, status: 'pending', src, fromText: true, auto: true,
+      t.adds.push(Object.assign({id: key, kind: 'voice', at: m.created, dur: m.dur, status: 'pending', src, fromText: true, auto: true, check: true,
         undo: {points: arr(t.r.points), tags: arr(t.r.tags), stage: t.stage, next: t.next}}, split ? {split: true} : {}, has ? {} : {noAudio: true}));
-      rec.adds.push({tid: t.id, aid: key}); jobs.push([t.id, key]);
+      jobs.push([t.id, key]);
       said.push(`「${t.r.title}」에 이어 붙임`);
     } else {
       const x = i ? {id: key, kind: 'voice', created: m.created, dur: m.dur, model: used} : m;
@@ -904,7 +928,7 @@ async function joinPieces(m, pieces, cands, used){
       if (split) Object.assign(x, {fromText: true, split: true, text: src});
       if (!has) x.noAudio = true;
       if (i) fresh.push(x);
-      rec.made.push(x.id); said.push(`새 메모 「${x.r.title}」`);
+      said.push(`새 메모 「${x.r.title}」`);
     }
   }
   memos.splice(memos.indexOf(m) + 1, 0, ...fresh);
@@ -912,8 +936,8 @@ async function joinPieces(m, pieces, cands, used){
   if (absorbed){ memos = memos.filter(x => x !== m); if (openId === m.id) closeSheet(); }
   saveMemos(); render();
   if (!absorbed && openId === m.id) openDetail(m.id);
-  toast(split ? `${pieces.length}가지 얘기로 나눴습니다 — ${said.join(' · ')}` : `${said[0].replace('에 이어 붙임', ' 메모에 이어 붙였습니다')}`,
-    {label: split ? '되돌리기' : '따로 떼기', fn: () => undoJoin(rec), ms: 10000});
+  // 맞는지 확인은 나중에 — 메모의 확인 칸과 목록 위 "확인하기" 줄에 남아 있다
+  toast(split ? `${pieces.length}가지 얘기로 나눴습니다 — ${said.join(' · ')}` : said[0].replace('에 이어 붙임', ' 메모에 이어 붙였습니다'));
   // 새로 생긴 메모는 평소처럼 독스로, 붙은 조각은 그 메모의 핵심을 다시 뽑는다 (처리 후 독스 반영은 processAdd 가 함)
   if (cfg.gdocAuto !== false && gdocReady()) [...(absorbed ? [] : [m]), ...fresh].forEach(x => sendToDocs(x, true));
   for (const [tid, aid] of jobs) await processAdd(tid, aid);
@@ -933,27 +957,6 @@ function pullAdd(t, a){
 function docDelete(m){
   if (m.gdoc && gdocReady()) fetch(cfg.gdocUrl, {method:'POST', body: JSON.stringify({action:'delete', id:m.id, created:fmtDate(m.created), kind:m.kind})}).catch(() => {});
 }
-/* 알림의 되돌리기: 붙인 조각·새로 만든 조각을 모두 걷어내고, 처음 녹음 하나로 되돌려 따로 정리한다 */
-function undoJoin(rec){
-  rec.adds.forEach(({tid, aid}) => {
-    const t = memos.find(x => x.id === tid), a = t && arr(t.adds).find(x => x.id === aid);
-    if (!a) return;
-    pullAdd(t, a);
-    if (aid !== rec.orig.id) idb.del(aid).catch(() => {});
-  });
-  rec.made.forEach(id => {
-    const x = id !== rec.orig.id && memos.find(y => y.id === id);
-    if (!x) return;
-    memos = memos.filter(y => y !== x); idb.del(id).catch(() => {}); docDelete(x);
-  });
-  let m = memos.find(x => x.id === rec.orig.id);
-  if (!m){ m = {id: rec.orig.id, kind: 'voice', created: rec.orig.created, dur: rec.orig.dur}; memos.unshift(m); }
-  ['r', 'fromText', 'split', 'text', 'noAudio'].forEach(k => delete m[k]);
-  m.noMerge = true; m.status = 'pending';
-  saveMemos(); render();
-  if (openId && memos.some(x => x.id === openId)) openDetail(openId);
-  processMemo(m.id);
-}
 /* 이어서 한 말 하나를 새 메모로 떼어 낸다. 받아쓴 글이 있으면 그 글로 정리하고, 녹음은 들어 보기용으로 함께 옮긴다 */
 function detachAdd(t, aid){
   const a = t && arr(t.adds).find(x => x.id === aid); if (!a) return;
@@ -963,9 +966,85 @@ function detachAdd(t, aid){
   const x = {id: aid, created: a.at, status: 'pending', noMerge: true};
   if (a.kind === 'text') Object.assign(x, {kind: 'text', text: txt});
   else Object.assign(x, {kind: 'voice', dur: a.dur}, txt ? {fromText: true, text: txt} : {}, a.split ? {split: true} : {}, a.noAudio ? {noAudio: true} : {});
-  memos.unshift(x); saveMemos(); render(); openDetail(t.id);
+  memos.unshift(x); saveMemos(); render(); refreshJoinView(t.id);
   toast(restored ? '새 메모로 떼어 냈습니다' : '새 메모로 떼어 냈습니다. 이 메모의 핵심도 맞추려면 "다시 정리"를 누르세요', restored ? undefined : {label: '확인', fn(){}, ms: 7000});
   processMemo(x.id);
+}
+/* ---------- 자동으로 붙은 것 확인 ----------
+   자동으로 붙인 조각은 a.check 로 "확인 대기"가 된다. 사라지는 알림 대신 메모 상세(핵심 위)와
+   목록 위 "확인하기" 줄에 남아, 시간 날 때 확정 / 따로 떼기 / 다른 메모로 옮기기 중에 고른다 */
+const checksOf = m => arr(m.adds).filter(a => a.check);
+const allChecks = () => memos.flatMap(m => checksOf(m).map(a => ({t: m, a})));
+let checkOpen = false, moveSrc = null;   // 확인하기 화면이 열려 있는지 / 옮길 조각 {tid, aid, back}
+/* 확인 동작 뒤 보던 화면을 다시 그린다 (확인하기 화면 또는 그 메모 상세) */
+function refreshJoinView(tid){
+  if (checkOpen){ if (allChecks().length) openChecks(); else { closeSheet(); toast('모두 확인했습니다'); } return; }
+  if (memos.some(x => x.id === tid)) openDetail(tid);
+}
+function confirmJoin(t, aid){
+  const a = t && arr(t.adds).find(x => x.id === aid); if (!a) return;
+  delete a.check; delete a.undo;
+  saveMemos(); render(); refreshJoinView(t.id);
+  toast('이어 적기로 확정했습니다');
+}
+/* 다른 메모로 옮기기: 지금 메모에서 빼고(마지막이면 핵심도 되돌림) 고른 메모에 이어 붙여 핵심을 다시 뽑는다.
+   사용자가 직접 고른 곳이니 확인 대기는 풀어 둔다 */
+function moveAdd(t, aid, dest){
+  const a = t && arr(t.adds).find(x => x.id === aid); if (!a || !dest || !dest.r) return;
+  pullAdd(t, a);
+  delete a.check; delete a.newPts; delete a.auto;
+  a.undo = {points: arr(dest.r.points), tags: arr(dest.r.tags), stage: dest.stage, next: dest.next};
+  a.status = 'pending';
+  dest.adds = arr(dest.adds); dest.adds.push(a); dest.adds.sort((x, y) => x.at - y.at);
+  saveMemos(); render();
+  toast(`「${dest.r.title}」 메모로 옮겼습니다`);
+  processAdd(dest.id, aid);
+}
+function checkHTML(t, a, withTitle){
+  const busy = a.status === 'working' || a.status === 'pending';
+  return `<div class="join-check">
+    <div class="jc-head">🔗 ${fmtDate(a.at)} 녹음이 ${withTitle ? `「${esc(t.r.title)}」에 ` : ''}자동으로 붙었어요</div>
+    <p class="jc-said">“${esc(a.text || a.src || '')}”</p>
+    ${busy ? '<p class="hint">핵심을 다시 뽑는 중…</p>'
+      : a.status === 'error' ? `<p class="state-err">${esc(a.err)}</p>`
+      : arr(a.newPts).length ? `<div class="jc-lab">핵심에 새로 들어간 것</div><ul>${a.newPts.map(x => `<li>${esc(x)}</li>`).join('')}</ul>` : ''}
+    <div class="jc-acts">
+      <button class="jc-ok" data-act="joinok" data-tid="${t.id}" data-aid="${a.id}">✓ 이어 적기 확정</button>
+      <button data-act="detachadd" data-tid="${t.id}" data-aid="${a.id}">따로 떼기</button>
+      <button data-act="joinmove" data-tid="${t.id}" data-aid="${a.id}">다른 메모로</button>
+    </div>
+  </div>`;
+}
+function openChecks(){
+  const list = allChecks();
+  if (!list.length){ toast('확인할 것이 없습니다'); closeSheet(); return; }
+  openId = null; freeAudio(); checkOpen = true; moveSrc = null;
+  showSheet(`<h2>자동으로 붙은 것 확인</h2>
+    <p class="hint">새 녹음이 같은 얘기라고 판단돼 예전 메모에 붙은 것들입니다. 맞으면 확정, 아니면 떼거나 옮기세요.</p>
+    ${list.map(({t, a}) => checkHTML(t, a, true)).join('')}
+    <div class="actions"><button class="btn" data-act="close">닫기</button></div>`);
+}
+function openMove(t, aid){
+  const a = t && arr(t.adds).find(x => x.id === aid); if (!a) return;
+  moveSrc = {tid: t.id, aid, back: checkOpen ? 'check' : 'detail'};
+  openId = null; checkOpen = false; freeAudio();
+  const list = joinCands(t);
+  showSheet(`<h2>어느 메모로 옮길까요?</h2>
+    <p class="jc-said">“${esc(a.text || a.src || '')}”</p>
+    <label class="search-box move-search"><input id="moveQ" type="search" placeholder="메모 찾기..."></label>
+    <div class="move-list">${list.map(x => `<button class="move-item" data-act="moveto" data-dest="${x.id}" data-q="${esc([x.r.title, arr(x.r.tags).join(' '), x.r.transcript].join(' ').toLowerCase())}">
+      <span class="meta">${stageOf(x).i} ${esc(x.r.category)} · ${relTime(x.created)}</span><span class="mv-title">${esc(x.r.title || '제목 없음')}</span></button>`).join('') || '<p class="hint">옮길 수 있는 메모가 없습니다</p>'}</div>
+    <div class="actions"><button class="btn" data-act="moveback">돌아가기</button></div>`);
+  $('#moveQ').oninput = e => {
+    const q = e.target.value.trim().toLowerCase();
+    $('#sheetBody').querySelectorAll('.move-item').forEach(b => { b.hidden = !!q && !b.dataset.q.includes(q); });
+  };
+}
+function moveBack(src){
+  moveSrc = null;
+  if (src && src.back === 'check' && allChecks().length) return openChecks();
+  if (src && memos.some(x => x.id === src.tid)) return openDetail(src.tid);
+  closeSheet();
 }
 function deleteAdd(m, aid){
   const a = m && arr(m.adds).find(x => x.id === aid); if (!a) return;
@@ -1086,9 +1165,10 @@ function renderList(){
     // 음성: (녹음) · 이어서 말한 게 있으면 (녹음 N) · 글로 이어 적은 게 있으면 뒤에 · 이어서 N
     const adds = doneAdds(m), vN = adds.filter(x => x.kind === 'voice').length, tN = adds.length - vN;
     const kindLabel = m.kind === 'voice' ? `(녹음${vN ? ` ${vN + 1}` : ''}${tN ? ` · 이어서 ${tN}` : ''})` : (adds.length ? `(이어서 ${adds.length})` : '');
+    const ck = checksOf(m).length;
     return `<li class="item${pc}"><button data-id="${m.id}"${pick && m.status === 'done' ? ` aria-pressed="${pick.has(m.id)}"` : ''}>
       <div class="meta">${fmtDate(m.created)}${cat ? ` <span class="cat-dot" style="background:${color}"></span>${esc(cat)}` : ''}<span class="kind">${m.kind === 'voice' ? MIC_SVG : NOTE_SVG}${kindLabel}</span></div>
-      <div class="item-title">${esc(title)}</div>
+      <div class="item-title">${esc(title)}${ck ? ` <span class="jc-badge">확인 ${ck}</span>` : ''}</div>
       <div class="item-sub">${m.status === 'error' ? sub : esc(sub)}</div>
     </button></li>`;
   }).join('');
@@ -1102,7 +1182,12 @@ $('#list').onclick = e => {
   b.closest('.item').classList.toggle('picked', pick.has(m.id)); b.setAttribute('aria-pressed', pick.has(m.id));
   updatePickBar();
 };
-function render(){ renderReview(); renderFilters(); renderList(); }
+function renderJoinStrip(){
+  const n = allChecks().length, b = $('#joinStrip');
+  b.hidden = !n; if (n) b.innerHTML = `<span>🔗 자동으로 붙은 것 <b>${n}개</b></span><span>확인하기 ›</span>`;
+}
+$('#joinStrip').onclick = openChecks;
+function render(){ renderJoinStrip(); renderReview(); renderFilters(); renderList(); }
 
 /* ---------- 시트 ---------- */
 let audioUrls = [], sheetOpener = null;
@@ -1129,7 +1214,7 @@ function closeSheet(){
   const sheet = $('#sheet');
   if (!sheet.classList.contains('open')) return;
   sheet.classList.remove('open'); $('#sheetBg').classList.remove('open');
-  openId = null; addFor = null;
+  openId = null; addFor = null; checkOpen = false; moveSrc = null;
   freeAudio();
   if (sheetOpener && sheetOpener.focus && document.contains(sheetOpener)) sheetOpener.focus({preventScroll:true});
   sheetOpener = null;
@@ -1168,7 +1253,7 @@ const ul = a => arr(a).length ? `<ul>${arr(a).map(x => `<li>${esc(x)}</li>`).joi
 
 async function openDetail(id, showOpinion){
   const m = memos.find(x => x.id === id); if (!m) return;
-  openId = id;
+  openId = id; checkOpen = false; moveSrc = null;
   const r = m.r || {};
   let body = '';
   if (m.status === 'done'){
@@ -1190,6 +1275,7 @@ async function openDetail(id, showOpinion){
       <div class="add-row">${isRecording() && cur.target === id
         ? `<button class="btn primary" data-act="addstop">멈추기 <span id="addTimer">0:00</span></button>`
         : `<button class="link-btn" data-act="addvoice">🎙 이어서 말하기</button><button class="link-btn" data-act="addtext">✎ 이어서 적기</button>`}</div>
+      ${checksOf(m).map(a => checkHTML(m, a, false)).join('')}
       <h3>핵심</h3>${ul(r.points)}
       ${m.opinionWorking ? `<p class="ai-wait">AI가 의견을 쓰는 중…</p>`
         : hasOpinion(r) ? `<button class="link-btn ai-toggle" data-act="opinion" aria-expanded="${showOpinion ? 'true' : 'false'}">${showOpinion ? 'AI 의견 접기 ▴' : 'AI 의견 보기 ▾'}</button>`
@@ -1235,7 +1321,7 @@ async function openDetail(id, showOpinion){
   }
 }
 function addHTML(a){
-  const head = `<div class="meta">${fmtDate(a.at)} · ${relTime(a.at)}${a.kind === 'voice' ? ` 🎙 ${a.dur || ''}초` : ' ✎'}${a.auto ? ' · 자동으로 이어 붙임' : ''}</div>`;
+  const head = `<div class="meta">${fmtDate(a.at)} · ${relTime(a.at)}${a.kind === 'voice' ? ` 🎙 ${a.dur || ''}초` : ' ✎'}${a.check ? ' · <span class="jc-badge">확인 대기</span>' : a.auto ? ' · 자동으로 이어 붙임' : ''}</div>`;
   const text = a.status === 'done' ? `<p class="transcript">${esc(a.text)}</p>`
     : a.status === 'error' ? `<p class="state-err">${esc(a.err)}</p>${a.kind === 'voice' && a.noAudio && !a.fromText ? '' : `<button class="link-btn" data-act="redoadd" data-aid="${a.id}">${a.fromText ? '다시 정리' : '다시 받아쓰기'}</button>`}`
     : `<p class="hint">${a.kind === 'text' || a.fromText ? esc(a.src) + '<br>' : ''}${a.fromText ? '핵심을 다시 뽑는 중…' : '받아쓰는 중…'}</p>`;
@@ -1274,7 +1360,16 @@ $('#sheetBody').onclick = e => {
   if (act === 'canceladd'){ const t = addFor; addFor = null; return t ? openDetail(t) : closeSheet(); }
   if (act === 'redoadd') return processAdd(id, b.dataset.aid);
   if (act === 'deladd') return deleteAdd(m, b.dataset.aid);
-  if (act === 'detachadd') return detachAdd(m, b.dataset.aid);
+  const jt = b.dataset.tid ? memos.find(x => x.id === b.dataset.tid) : m;   // 확인하기 화면에서는 버튼이 메모 id 를 들고 있다
+  if (act === 'detachadd') return detachAdd(jt, b.dataset.aid);
+  if (act === 'joinok') return confirmJoin(jt, b.dataset.aid);
+  if (act === 'joinmove') return openMove(jt, b.dataset.aid);
+  if (act === 'moveback') return moveBack(moveSrc);
+  if (act === 'moveto'){
+    const src = moveSrc, t = src && memos.find(x => x.id === src.tid);
+    moveAdd(t, src && src.aid, memos.find(x => x.id === b.dataset.dest));
+    return moveBack(src);
+  }
   if (act === 'archive') return archiveMemo(id, true);
   if (act === 'unarchive') return archiveMemo(id, false);
   if (act === 'redo') return processMemo(id);
