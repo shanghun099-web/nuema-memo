@@ -617,9 +617,53 @@ ${text ? '아래 글 메모를' : '첨부된 음성 메모를 듣고'} 정리해
 ${more ? '- 이 메모에는 나중에 이어서 덧붙인 말이 있다. transcript는 처음 메모만 받아쓰고, points·tags는 덧붙인 말까지 전체를 보고 뽑는다. 생각이 처음과 달라졌으면 달라진 쪽을 반영한다.\n' : ''}${cfg.guide ? '추가 지시:\n' + cfg.guide : ''}
 ${text ? '\n메모:\n' + text : ''}${more ? '\n\n이어서 덧붙인 말:\n' + more : ''}`;
 }
-/* 이어서 한 말 한 건을 받아쓰고, 처음 메모와 합쳐 핵심·태그를 새로 뽑는다 (제목·분류는 그대로 둔다) */
+/* 같은 얘기 찾기에 쓸 기존 메모 — 보관 안 한, 정리 끝난 메모 전부 */
+const joinCands = m => memos.filter(x => x !== m && x.status === 'done' && x.r && !x.archived);
+/* 새 녹음을 받아쓰면서 얘기별 조각으로 나누고, 조각마다 이어지는 기존 메모 번호를 고르게 한다.
+   ID 대신 번호로 고르게 해 긴 ID를 잘못 베끼는 일을 막는다 */
+function buildSortPrompt(cands){
+  const list = cands.map((x, i) => {
+    const r = x.r, line = `#${i + 1} [${r.category}] ${r.title}${arr(r.tags).length ? ' | 태그: ' + r.tags.join(', ') : ''}${arr(r.points).length ? ' | 핵심: ' + r.points.join(' / ') : ''}`;
+    return line.length > 220 ? line.slice(0, 220) + '…' : line;
+  }).join('\n');
+  return `${PERSONA}
+첨부된 음성 메모를 듣고 정리해라. 누에마는 예전에 하던 얘기를 새 녹음에서 이어서 하기도 하고, 한 번 녹음하면서 여러 얘기로 넘어가기도 한다. 그래서 받아쓴 말을 얘기별 조각으로 나누고, 조각마다 아래 "기존 메모" 중 하나를 이어서 하는 얘기인지 판단한다.
+
+반드시 아래 JSON 하나만 출력한다. 마크다운이나 설명 문장은 쓰지 않는다.
+{
+  "pieces": [
+    {
+      "transcript": "이 조각에 해당하는 말을 그대로 받아쓰기. 음, 어 같은 군말만 빼고 내용은 더하지도 빼지도 않는다",
+      "match": 0,
+      "title": "15자 이내 제목",
+      "category": "글감 | 쇼츠 | 앱 | 업무 | 기타 중 하나",
+      "points": ["이 조각의 원문에 실제로 있는 핵심 2~5개"],
+      "tags": ["키워드 2~5개"]
+    }
+  ]
+}
+
+나누기 규칙:
+- 대부분의 녹음은 조각 하나다. 전혀 다른 대상으로 얘기가 넘어갔을 때만(예: 가족 앱 얘기를 하다가 시 아이디어로) 나눈다. 같은 얘기의 세부 갈래나 곁가지는 나누지 않는다.
+- 조각은 말한 순서대로 두고, 조각들의 transcript를 이어 붙이면 녹음 전체가 빠짐없이 되어야 한다.
+
+이어 붙이기 규칙 (match):
+- 그 기존 메모와 같은 대상(같은 앱, 같은 글감, 같은 쇼츠, 같은 일)을 이어서 말한 게 분명할 때만 그 메모의 번호(숫자)를 적는다. 아니면 0.
+- 분류나 분위기만 비슷한 것(둘 다 앱 얘기, 둘 다 사물 시)으로는 붙이지 않는다. 애매하면 0.
+- match가 0이 아니면 title·category·points·tags는 비워 둔다 (기존 메모에 붙으므로).
+
+정리 규칙:
+- points에는 원문에 없는 내용을 넣지 않는다. 너의 의견·제안은 넣지 않는다 (의견은 따로 요청받을 때만 쓴다).
+- 사실 정보가 불확실하면 단정하지 말고 확인이 필요하다고 적는다.
+${cfg.guide ? '추가 지시:\n' + cfg.guide : ''}
+
+기존 메모:
+${list}`;
+}
+/* 이어서 한 말 한 건을 받아쓰고, 처음 메모와 합쳐 핵심·태그를 새로 뽑는다 (제목·분류는 그대로 둔다).
+   a.fromText 는 자동으로 이어 붙인 조각 — 이미 받아쓴 글(a.src)이 있어 음성 대신 글로 보낸다 */
 function buildAddPrompt(m, a){
-  const r = m.r || {}, prev = addsText(m, a), voice = a.kind === 'voice';
+  const r = m.r || {}, prev = addsText(m, a), voice = a.kind === 'voice' && !a.fromText;
   return `${PERSONA}
 누에마가 예전에 남긴 메모에 생각을 이어서 덧붙였다. ${voice ? '첨부된 음성(이번에 덧붙인 말)을 듣고' : '아래 "이번에 덧붙인 글"을 읽고'} 정리해라.
 
@@ -715,25 +759,36 @@ async function requestOpinion(id){
   m.opinionWorking = false;
   if (openId === id) openDetail(id, true);
 }
+const fixCat = r => { if (!CATS.some(c => c.k === r.category)) r.category = '기타'; return r; };
+/* m.fromText: 이미 받아쓴 글(m.text)로 정리하는 녹음 메모 — 나눈 조각이나 떼어 낸 이어서 한 말. 녹음은 들어 보기용 */
 async function processMemo(id){
   const m = memos.find(x => x.id === id); if (!m) return;
-  if (m.kind === 'voice' && m.noAudio){ toast('녹음 원본을 지운 메모라 다시 정리할 수 없습니다'); return; }
+  if (m.kind === 'voice' && m.noAudio && !m.fromText){ toast('녹음 원본을 지운 메모라 다시 정리할 수 없습니다'); return; }
   if (!cfg.key){ m.status = 'error'; m.err = '설정에서 Gemini API 키를 입력하세요'; saveMemos(); render(); openSettings(); return; }
   const prev = m.status === 'done' ? m.r : null;   // 다시 정리가 실패해도 이전 결과는 지키기 위해
+  // 처음 정리하는 새 녹음만 같은 얘기를 찾는다 (다시 정리·되돌린 메모·조각은 제자리에서)
+  const cands = !prev && m.kind === 'voice' && !m.fromText && !m.noMerge && cfg.autoJoin !== false ? joinCands(m) : [];
+  let pieces = null, usedModel = null;
   m.status = 'working'; m.err = ''; saveMemos(); render(); if (openId === id) openDetail(id);
   try{
     let parts;
-    if (m.kind === 'voice'){
+    if (m.kind === 'voice' && !m.fromText){
       const blob = await idb.get(id);
       if (!blob) throw new Error('녹음 파일이 이 기기에 없습니다');
-      parts = [await audioPart(blob), {text: buildPrompt('', m)}];
+      parts = [await audioPart(blob), {text: cands.length ? buildSortPrompt(cands) : buildPrompt('', m)}];
     } else {
       parts = [{text: buildPrompt(m.text, m)}];
     }
     const {json, used} = await geminiJSON(parts);
-    m.r = json;
-    if (!CATS.some(c => c.k === m.r.category)) m.r.category = '기타';
-    m.model = used;
+    if (cands.length){
+      pieces = arr(json.pieces).filter(p => String(p.transcript || '').trim());
+      if (!pieces.length && json.transcript) pieces = [json];   // 조각 없이 예전 모양으로 답한 경우
+      if (!pieces.length) throw new Error('AI 응답을 읽지 못했습니다. 다시 정리해 보세요');
+      const p = pieces[0];
+      m.r = fixCat({transcript: String(p.transcript).trim(), title: p.title, category: p.category, points: arr(p.points), tags: arr(p.tags)});
+      if (pieces.length === 1 && !matchOf(p, cands)) pieces = null;   // 섞이지도, 이어지지도 않으면 평소처럼
+    } else m.r = fixCat(json);
+    m.model = usedModel = used;
     m.status = 'done';
     if (used !== cfg.model) toast(`${cfg.model}가 응답하지 않아 ${used}로 정리했습니다`);
   }catch(e){
@@ -741,6 +796,7 @@ async function processMemo(id){
     if (prev){ m.r = prev; m.status = 'done'; m.err = ''; toast('다시 정리하지 못했습니다. 이전 결과를 유지합니다 — ' + msg); }
     else { m.status = 'error'; m.err = msg; }
   }
+  if (pieces) return joinPieces(m, pieces, cands, usedModel);
   saveMemos(); render();
   if (openId === id) openDetail(id);
   if (m.status === 'error') toast(m.err);
@@ -794,13 +850,14 @@ async function processAdd(id, aid){
   a.status = 'working'; a.err = ''; saveMemos(); render(); if (openId === id) openDetail(id);
   try{
     let parts;
-    if (a.kind === 'voice'){
+    if (a.kind === 'voice' && !a.fromText){
       const blob = await idb.get(aid);
       if (!blob) throw new Error('녹음 파일이 이 기기에 없습니다');
       parts = [await audioPart(blob), {text: buildAddPrompt(m, a)}];
     } else parts = [{text: buildAddPrompt(m, a)}];
     const {json} = await geminiJSON(parts);
-    a.text = a.kind === 'text' ? a.src : String(json.transcript || '').trim();
+    if (!arr(m.adds).includes(a)) return;   // 기다리는 사이 따로 떼어 냈으면 핵심을 건드리지 않는다
+    a.text = a.kind === 'text' || a.fromText ? a.src : String(json.transcript || '').trim();
     if (!a.text) throw new Error('받아쓴 내용이 비어 있습니다');
     a.status = 'done';
     if (m.r){
@@ -810,12 +867,105 @@ async function processAdd(id, aid){
     if (!m.stage || m.stage === 'seed') m.stage = 'sprout';
     m.next = Date.now() + 3 * DAY;
   }catch(e){
+    if (!arr(m.adds).includes(a)) return;
     a.status = 'error'; a.err = e.message || String(e);
     toast('덧붙인 말을 정리하지 못했습니다 — ' + a.err);
   }
   saveMemos(); render();
   if (openId === id) openDetail(id);
   if (a.status === 'done' && m.gdoc && cfg.gdocAuto !== false && gdocReady()) sendToDocs(m, true);
+}
+/* ---------- 같은 얘기 자동으로 이어 붙이기 ----------
+   새 녹음을 정리할 때 기존 메모 목록을 같이 보내, 같은 얘기면 그 메모의 '이어서 한 말'로 넣는다.
+   한 녹음에 다른 얘기가 섞여 있으면 얘기별 조각으로 나눠 각각 붙이거나 새 메모로 만든다.
+   조각마다 녹음 원본(녹음 전체)을 따로 복사해 둬서, 나중에 떼거나 지워도 서로 영향이 없다 */
+function matchOf(p, cands){
+  const n = parseInt(String(p && p.match != null ? p.match : '').replace(/\D/g, ''), 10);
+  return n >= 1 && n <= cands.length ? cands[n - 1] : null;
+}
+async function joinPieces(m, pieces, cands, used){
+  const blob = await idb.get(m.id).catch(() => null);
+  const split = pieces.length > 1, rec = {orig: {id: m.id, created: m.created, dur: m.dur}, made: [], adds: []};
+  const fresh = [], jobs = [], said = [];
+  for (let i = 0; i < pieces.length; i++){
+    const p = pieces[i], key = i ? `${m.id}_${i}` : m.id, t = matchOf(p, cands), src = String(p.transcript).trim();
+    let has = !!blob;
+    if (i && blob){ try{ await idb.put(key, blob); }catch(e){ has = false; } }
+    if (t){
+      t.adds = arr(t.adds);
+      t.adds.push(Object.assign({id: key, kind: 'voice', at: m.created, dur: m.dur, status: 'pending', src, fromText: true, auto: true,
+        undo: {points: arr(t.r.points), tags: arr(t.r.tags), stage: t.stage, next: t.next}}, split ? {split: true} : {}, has ? {} : {noAudio: true}));
+      rec.adds.push({tid: t.id, aid: key}); jobs.push([t.id, key]);
+      said.push(`「${t.r.title}」에 이어 붙임`);
+    } else {
+      const x = i ? {id: key, kind: 'voice', created: m.created, dur: m.dur, model: used} : m;
+      if (i) x.r = fixCat({transcript: src, title: p.title || src.slice(0, 15), category: p.category, points: arr(p.points), tags: arr(p.tags)});
+      x.status = 'done';
+      if (split) Object.assign(x, {fromText: true, split: true, text: src});
+      if (!has) x.noAudio = true;
+      if (i) fresh.push(x);
+      rec.made.push(x.id); said.push(`새 메모 「${x.r.title}」`);
+    }
+  }
+  memos.splice(memos.indexOf(m) + 1, 0, ...fresh);
+  const absorbed = !!matchOf(pieces[0], cands);
+  if (absorbed){ memos = memos.filter(x => x !== m); if (openId === m.id) closeSheet(); }
+  saveMemos(); render();
+  if (!absorbed && openId === m.id) openDetail(m.id);
+  toast(split ? `${pieces.length}가지 얘기로 나눴습니다 — ${said.join(' · ')}` : `${said[0].replace('에 이어 붙임', ' 메모에 이어 붙였습니다')}`,
+    {label: split ? '되돌리기' : '따로 떼기', fn: () => undoJoin(rec), ms: 10000});
+  // 새로 생긴 메모는 평소처럼 독스로, 붙은 조각은 그 메모의 핵심을 다시 뽑는다 (처리 후 독스 반영은 processAdd 가 함)
+  if (cfg.gdocAuto !== false && gdocReady()) [...(absorbed ? [] : [m]), ...fresh].forEach(x => sendToDocs(x, true));
+  for (const [tid, aid] of jobs) await processAdd(tid, aid);
+}
+/* 이어서 한 말 하나를 메모에서 빼낸다. 자동으로 붙인 게 맨 마지막이면 붙이기 전 핵심·단계로 돌려놓는다 */
+function pullAdd(t, a){
+  const last = arr(t.adds).slice(-1)[0] === a;
+  t.adds = arr(t.adds).filter(x => x !== a);
+  if (last && a.undo && t.r){
+    t.r.points = a.undo.points; t.r.tags = a.undo.tags;
+    if (a.undo.stage) t.stage = a.undo.stage; else delete t.stage;
+    if (a.undo.next) t.next = a.undo.next; else delete t.next;
+  }
+  if (t.gdoc && cfg.gdocAuto !== false && gdocReady()) sendToDocs(t, true);
+  return last && !!a.undo;   // 핵심까지 붙이기 전으로 돌렸는지
+}
+function docDelete(m){
+  if (m.gdoc && gdocReady()) fetch(cfg.gdocUrl, {method:'POST', body: JSON.stringify({action:'delete', id:m.id, created:fmtDate(m.created), kind:m.kind})}).catch(() => {});
+}
+/* 알림의 되돌리기: 붙인 조각·새로 만든 조각을 모두 걷어내고, 처음 녹음 하나로 되돌려 따로 정리한다 */
+function undoJoin(rec){
+  rec.adds.forEach(({tid, aid}) => {
+    const t = memos.find(x => x.id === tid), a = t && arr(t.adds).find(x => x.id === aid);
+    if (!a) return;
+    pullAdd(t, a);
+    if (aid !== rec.orig.id) idb.del(aid).catch(() => {});
+  });
+  rec.made.forEach(id => {
+    const x = id !== rec.orig.id && memos.find(y => y.id === id);
+    if (!x) return;
+    memos = memos.filter(y => y !== x); idb.del(id).catch(() => {}); docDelete(x);
+  });
+  let m = memos.find(x => x.id === rec.orig.id);
+  if (!m){ m = {id: rec.orig.id, kind: 'voice', created: rec.orig.created, dur: rec.orig.dur}; memos.unshift(m); }
+  ['r', 'fromText', 'split', 'text', 'noAudio'].forEach(k => delete m[k]);
+  m.noMerge = true; m.status = 'pending';
+  saveMemos(); render();
+  if (openId && memos.some(x => x.id === openId)) openDetail(openId);
+  processMemo(m.id);
+}
+/* 이어서 한 말 하나를 새 메모로 떼어 낸다. 받아쓴 글이 있으면 그 글로 정리하고, 녹음은 들어 보기용으로 함께 옮긴다 */
+function detachAdd(t, aid){
+  const a = t && arr(t.adds).find(x => x.id === aid); if (!a) return;
+  const txt = a.status === 'done' ? a.text : a.src || '';
+  if (a.kind === 'voice' && !txt && a.noAudio){ toast('받아쓴 글도 녹음도 없어 떼어 낼 수 없습니다'); return; }
+  const restored = pullAdd(t, a);
+  const x = {id: aid, created: a.at, status: 'pending', noMerge: true};
+  if (a.kind === 'text') Object.assign(x, {kind: 'text', text: txt});
+  else Object.assign(x, {kind: 'voice', dur: a.dur}, txt ? {fromText: true, text: txt} : {}, a.split ? {split: true} : {}, a.noAudio ? {noAudio: true} : {});
+  memos.unshift(x); saveMemos(); render(); openDetail(t.id);
+  toast(restored ? '새 메모로 떼어 냈습니다' : '새 메모로 떼어 냈습니다. 이 메모의 핵심도 맞추려면 "다시 정리"를 누르세요', restored ? undefined : {label: '확인', fn(){}, ms: 7000});
+  processMemo(x.id);
 }
 function deleteAdd(m, aid){
   const a = m && arr(m.adds).find(x => x.id === aid); if (!a) return;
@@ -995,7 +1145,7 @@ function commitDelete(){
   const {m, t} = pendingDel; clearTimeout(t); pendingDel = null;
   if (m.kind === 'voice') idb.del(m.id).catch(() => {});
   arr(m.adds).forEach(a => { if (a.kind === 'voice') idb.del(a.id).catch(() => {}); });
-  if (m.gdoc && gdocReady()) fetch(cfg.gdocUrl, {method:'POST', body: JSON.stringify({action:'delete', id:m.id, created:fmtDate(m.created), kind:m.kind})}).catch(() => {});
+  docDelete(m);
 }
 function undoDelete(){
   if (!pendingDel) return;
@@ -1032,6 +1182,7 @@ async function openDetail(id, showOpinion){
         `<button class="chip" data-stage="${s.k}" aria-pressed="${s.k === stageOf(m).k}">${s.i} ${s.n}</button>`).join('')}</div>
       <div class="tags">${arr(r.tags).map(t => `<span class="tag">${esc(t)}</span>`).join('')}</div>
       ${m.archived ? '<p class="hint">보관함에 있는 메모입니다. 목록과 다시 보기에는 나오지 않습니다.</p>' : ''}
+      ${m.split && !m.noAudio ? '<p class="hint">여러 얘기를 한 녹음에서 이 얘기만 나눈 메모입니다. 재생하면 녹음 전체가 나옵니다.</p>' : ''}
       <div id="audioSlot">${m.noAudio ? '<p class="hint">녹음 원본은 지웠고 받아쓴 글만 남아 있습니다.</p>' : ''}</div>
       <h3>내가 한 말</h3>
       <p class="transcript">${esc(r.transcript || m.text)}</p>
@@ -1058,7 +1209,7 @@ async function openDetail(id, showOpinion){
   } else {
     body = `<h2>정리하는 중…</h2><p class="hint">잠시 기다리면 자동으로 바뀝니다.</p><div id="audioSlot"></div>`;
   }
-  const canRedo = m.status !== 'working' && !(m.kind === 'voice' && m.noAudio);
+  const canRedo = m.status !== 'working' && !(m.kind === 'voice' && m.noAudio && !m.fromText);
   body += `<div class="actions">
     ${canRedo ? `<button class="btn primary" data-act="redo">${m.status === 'done' ? '다시 정리' : '정리하기'}</button>` : ''}
     ${m.status === 'done' ? `<button class="btn" data-act="copy">글로 복사</button><button class="btn" data-act="ppt">PPT 만들기</button><button class="btn" data-act="knot">매듭짓기로</button>` : ''}
@@ -1084,14 +1235,14 @@ async function openDetail(id, showOpinion){
   }
 }
 function addHTML(a){
-  const head = `<div class="meta">${fmtDate(a.at)} · ${relTime(a.at)}${a.kind === 'voice' ? ` 🎙 ${a.dur || ''}초` : ' ✎'}</div>`;
+  const head = `<div class="meta">${fmtDate(a.at)} · ${relTime(a.at)}${a.kind === 'voice' ? ` 🎙 ${a.dur || ''}초` : ' ✎'}${a.auto ? ' · 자동으로 이어 붙임' : ''}</div>`;
   const text = a.status === 'done' ? `<p class="transcript">${esc(a.text)}</p>`
-    : a.status === 'error' ? `<p class="state-err">${esc(a.err)}</p>${a.kind === 'voice' && a.noAudio ? '' : `<button class="link-btn" data-act="redoadd" data-aid="${a.id}">다시 받아쓰기</button>`}`
-    : `<p class="hint">${a.kind === 'text' ? esc(a.src) + '<br>' : ''}받아쓰는 중…</p>`;
+    : a.status === 'error' ? `<p class="state-err">${esc(a.err)}</p>${a.kind === 'voice' && a.noAudio && !a.fromText ? '' : `<button class="link-btn" data-act="redoadd" data-aid="${a.id}">${a.fromText ? '다시 정리' : '다시 받아쓰기'}</button>`}`
+    : `<p class="hint">${a.kind === 'text' || a.fromText ? esc(a.src) + '<br>' : ''}${a.fromText ? '핵심을 다시 뽑는 중…' : '받아쓰는 중…'}</p>`;
   const busy = a.status === 'working' || a.status === 'pending';
   return `<div class="add-item">${head}${text}
-    ${a.kind === 'voice' && !a.noAudio ? `<div data-addaudio="${a.id}"></div>` : ''}
-    ${busy ? '' : `<button class="link-btn" data-act="deladd" data-aid="${a.id}">지우기</button>`}</div>`;
+    ${a.kind === 'voice' && !a.noAudio ? `${a.split ? '<p class="hint">여러 얘기를 한 녹음이라 재생하면 녹음 전체가 나옵니다.</p>' : ''}<div data-addaudio="${a.id}"></div>` : ''}
+    ${busy ? '' : `<button class="link-btn" data-act="detachadd" data-aid="${a.id}">따로 떼기</button><button class="link-btn" data-act="deladd" data-aid="${a.id}">지우기</button>`}</div>`;
 }
 
 $('#sheetBody').onclick = e => {
@@ -1123,6 +1274,7 @@ $('#sheetBody').onclick = e => {
   if (act === 'canceladd'){ const t = addFor; addFor = null; return t ? openDetail(t) : closeSheet(); }
   if (act === 'redoadd') return processAdd(id, b.dataset.aid);
   if (act === 'deladd') return deleteAdd(m, b.dataset.aid);
+  if (act === 'detachadd') return detachAdd(m, b.dataset.aid);
   if (act === 'archive') return archiveMemo(id, true);
   if (act === 'unarchive') return archiveMemo(id, false);
   if (act === 'redo') return processMemo(id);
@@ -1288,6 +1440,7 @@ function openSettings(){
       ${cfg.modelsAt ? `<span class="hint">${fmtDate(cfg.modelsAt)} 기준 ${arr(cfg.models).length}개</span>` : ''}
     </div>
     <label class="check"><input type="checkbox" id="cfgFallback" ${cfg.fallback === false ? '' : 'checked'}> 고른 모델이 응답하지 않으면 다른 모델로 자동 재시도</label>
+    <label class="check"><input type="checkbox" id="cfgAutoJoin" ${cfg.autoJoin === false ? '' : 'checked'}> 새 녹음이 예전 메모와 같은 얘기면 자동으로 이어 붙이기 (여러 얘기가 섞이면 얘기별로 나눔)</label>
     <label class="field">AI에게 줄 추가 지시
       <textarea id="cfgGuide">${esc(cfg.guide)}</textarea></label>
     <button class="link-btn" data-act="resetguide">기본 지시로 되돌리기</button>
@@ -1349,7 +1502,7 @@ async function loadModels(){
       .sort((a, b) => b.id.localeCompare(a.id));   // 최신 버전이 위로
     if (!list.length) throw new Error('쓸 수 있는 모델이 없습니다');
     // 지금 입력 중인 값을 잃지 않게 먼저 담아 두고 설정 화면을 다시 그린다
-    cfg.key = key; cfg.model = currentModelInput(); cfg.guide = $('#cfgGuide').value.trim(); cfg.fallback = $('#cfgFallback').checked;
+    cfg.key = key; cfg.model = currentModelInput(); cfg.guide = $('#cfgGuide').value.trim(); cfg.fallback = $('#cfgFallback').checked; cfg.autoJoin = $('#cfgAutoJoin').checked;
     cfg.gdocUrl = $('#cfgGdoc').value.trim(); cfg.gdocAuto = $('#cfgGdocAuto').checked;
     cfg.models = list; cfg.modelsAt = Date.now();
     store.set('nuema_cfg_v1', cfg);
@@ -1361,6 +1514,7 @@ function saveSettings(){
   cfg.model = currentModelInput();
   cfg.guide = $('#cfgGuide').value.trim();
   cfg.fallback = $('#cfgFallback').checked;
+  cfg.autoJoin = $('#cfgAutoJoin').checked;
   cfg.gdocUrl = $('#cfgGdoc').value.trim();
   cfg.gdocAuto = $('#cfgGdocAuto').checked;
   store.set('nuema_cfg_v1', cfg);
