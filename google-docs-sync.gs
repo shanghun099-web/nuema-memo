@@ -1,7 +1,14 @@
 /**
- * 누에마 메모 → 구글 독스 연동 스크립트  (v3)
+ * 누에마 메모 → 구글 독스 연동 + 드라이브 백업 스크립트  (v4)
  *   - 다시 보내면 문서의 그 항목을 새 내용으로 바꿈 (이름표가 없는 예전 항목도 제목·날짜로 찾아 바꿈)
  *   - 앱에서 메모를 지우면 문서에서도 지움
+ *   - v4: 내 드라이브 "누에마 메모 백업" 폴더에 메모 전체(최근 7개)와 녹음 파일을 백업하고, 새 폰에서 되살림
+ *
+ * v3 에서 v4 로 바꿀 때 (이미 쓰고 있다면 이것만):
+ *  1. script.google.com 의 이 프로젝트에서 코드를 전부 지우고 이 파일 내용을 붙여넣고 저장
+ *  2. 위쪽 함수 고르는 칸에서 "setupBackup" 을 고르고 "실행" → 권한 허용
+ *       (드라이브에 백업 폴더를 만들려고 "드라이브 파일 보기·수정" 권한을 새로 묻습니다)
+ *  3. "배포" → "배포 관리" → 연필(수정) → 버전: "새 버전" → "배포"   (URL 은 그대로)
  *
  * 설치 (한 번만):
  *  1. https://script.google.com 에서 "새 프로젝트" → 이 파일 내용을 전부 붙여넣고 저장
@@ -21,17 +28,26 @@
 
 const DOC_ID = '';          // 비워두면 자동 생성
 const DOC_NAME = '누에마 메모';
+const BACKUP_FOLDER = '누에마 메모 백업';
+const KEEP_BACKUPS = 7;      // 메모 전체 백업은 최근 몇 개까지 남길지
 
 function doGet() {
   const doc = getDoc_();
-  return json_({ ok: true, v: 3, url: doc ? doc.getUrl() : '' });
+  return json_({ ok: true, v: 4, url: doc ? doc.getUrl() : '' });
+}
+
+/* 처음 한 번 편집기에서 실행해 드라이브 권한을 허용하고 백업 폴더를 만든다 */
+function setupBackup() {
+  Logger.log('백업 폴더: ' + folder_().getUrl());
 }
 
 function doPost(e) {
+  let p;
+  try { p = JSON.parse(e.postData.contents); } catch (err) { return json_({ ok: false, error: '요청을 읽지 못했습니다' }); }
+  if (String(p.action || '').indexOf('bk') === 0) return backup_(p);   // 백업은 문서를 건드리지 않는다
   const lock = LockService.getScriptLock();
   lock.waitLock(20000);
   try {
-    const p = JSON.parse(e.postData.contents);
     const props = PropertiesService.getScriptProperties();
     const key = p.id ? 'sent_' + p.id : '';
     const doc = getDoc_(true);
@@ -72,6 +88,89 @@ function doPost(e) {
   } finally {
     lock.releaseLock();
   }
+}
+
+/* ---------- 드라이브 백업 ----------
+   bkAudio   {id, mime, data(base64)}  녹음 하나 저장 (같은 id 가 이미 있으면 건너뜀)
+   bkMemos   {data(JSON 문자열)}        메모 전체를 새 파일로 저장하고 최근 KEEP_BACKUPS 개만 남김
+   bkRestore                            가장 최근 메모 전체 백업을 돌려줌
+   bkAudioGet {id}                      녹음 하나를 base64 로 돌려줌
+   bkDelete  {ids}                      지운 메모의 녹음을 휴지통으로 (30일 안에는 드라이브에서 되살릴 수 있음)
+   bkInfo                               백업 현황 */
+function backup_(p) {
+  try {
+    const folder = folder_();
+    if (p.action === 'bkAudio') {
+      if (!p.id || !p.data) throw new Error('녹음 내용이 비었습니다');
+      if (audioFile_(folder, p.id)) return json_({ ok: true, skipped: true });
+      const mime = String(p.mime || 'audio/webm').split(';')[0];
+      folder.createFile(Utilities.newBlob(Utilities.base64Decode(p.data), mime, 'audio_' + p.id + '.' + ext_(mime)));
+      return json_({ ok: true });
+    }
+    if (p.action === 'bkMemos') {
+      if (!p.data) throw new Error('메모 내용이 비었습니다');
+      const name = 'memos_' + Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd_HHmmss') + '.json';
+      folder.createFile(name, p.data, 'application/json');
+      memoFiles_(folder).slice(KEEP_BACKUPS).forEach(f => f.setTrashed(true));
+      return json_({ ok: true, name: name });
+    }
+    if (p.action === 'bkRestore') {
+      const f = memoFiles_(folder)[0];
+      if (!f) return json_({ ok: false, error: '드라이브에 백업이 아직 없습니다' });
+      return json_({ ok: true, name: f.getName(), data: f.getBlob().getDataAsString() });
+    }
+    if (p.action === 'bkAudioGet') {
+      const f = audioFile_(folder, p.id);
+      if (!f) return json_({ ok: false, error: '드라이브에 그 녹음이 없습니다' });
+      const b = f.getBlob();
+      return json_({ ok: true, mime: b.getContentType(), data: Utilities.base64Encode(b.getBytes()) });
+    }
+    if (p.action === 'bkDelete') {
+      let n = 0;
+      (p.ids || []).forEach(id => { const f = audioFile_(folder, id); if (f) { f.setTrashed(true); n++; } });
+      return json_({ ok: true, deleted: n });
+    }
+    if (p.action === 'bkInfo') {
+      let audio = 0;
+      const it = folder.searchFiles('title contains "audio_" and trashed = false');
+      while (it.hasNext()) { it.next(); audio++; }
+      const f = memoFiles_(folder)[0];
+      return json_({ ok: true, audio: audio, latest: f ? f.getName() : '', url: folder.getUrl() });
+    }
+    throw new Error('모르는 백업 요청입니다: ' + p.action);
+  } catch (err) {
+    return json_({ ok: false, error: String(err && err.message || err) });
+  }
+}
+
+/* 백업 폴더: 저장된 ID → 내 드라이브에서 이름으로 → 새로 만들기 */
+function folder_() {
+  const props = PropertiesService.getScriptProperties();
+  const id = props.getProperty('bk_folder');
+  if (id) {
+    try { const f = DriveApp.getFolderById(id); if (!f.isTrashed()) return f; } catch (e) { /* 지워졌으면 아래에서 */ }
+  }
+  const found = DriveApp.getRootFolder().getFoldersByName(BACKUP_FOLDER);
+  const folder = found.hasNext() ? found.next() : DriveApp.createFolder(BACKUP_FOLDER);
+  props.setProperty('bk_folder', folder.getId());
+  return folder;
+}
+
+/* 메모 전체 백업 파일들, 최신 것부터 (이름에 날짜·시각이 들어 있어 이름순 = 시간순) */
+function memoFiles_(folder) {
+  const out = [], it = folder.searchFiles('title contains "memos_" and trashed = false');
+  while (it.hasNext()) out.push(it.next());
+  return out.sort((a, b) => b.getName() < a.getName() ? -1 : 1);
+}
+
+/* 녹음 파일 찾기. "audio_m123." 처럼 점까지 붙여 찾아야 m123_1 같은 조각 파일과 헷갈리지 않는다 */
+function audioFile_(folder, id) {
+  const it = folder.searchFiles('title contains "audio_' + String(id).replace(/[^\w-]/g, '') + '." and trashed = false');
+  return it.hasNext() ? it.next() : null;
+}
+
+function ext_(mime) {
+  return ({ 'audio/webm': 'webm', 'audio/mp4': 'm4a', 'audio/ogg': 'ogg', 'audio/wav': 'wav', 'audio/mpeg': 'mp3' })[mime] || 'webm';
 }
 
 /* ---------- 내부 ---------- */

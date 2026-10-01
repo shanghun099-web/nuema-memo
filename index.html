@@ -357,6 +357,7 @@ body.picking .toast{bottom:calc(130px + env(safe-area-inset-bottom))}
     <div class="sub-actions"><button class="pill-btn" id="btnText">글로 적기<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16v4zM13.5 6.5l4 4"/></svg></button></div>
   </section>
 
+  <button class="join-strip" id="bkWarn" type="button" hidden></button>
   <button class="join-strip" id="joinStrip" type="button" hidden></button>
   <section class="review" id="review" aria-label="다시 볼 메모" hidden></section>
   <div class="filters" id="filters"></div>
@@ -426,7 +427,8 @@ function allModels(){
 }
 let filter = '전체';
 let openId = null;
-const saveMemos = () => store.set('nuema_memos_v1', memos);
+let bk = store.get('nuema_bk_v1', {});   // 드라이브 백업 현황 {at, audio, hash, err, errAt, v, vAt}
+const saveMemos = () => { store.set('nuema_memos_v1', memos); scheduleBackup(); };
 
 /* ---------- IndexedDB (녹음 원본 보관) ---------- */
 const idb = {
@@ -1049,7 +1051,7 @@ function moveBack(src){
 function deleteAdd(m, aid){
   const a = m && arr(m.adds).find(x => x.id === aid); if (!a) return;
   if (!confirm('이어서 한 말 하나를 지울까요?\n핵심은 그대로 남습니다. 핵심도 맞추려면 지운 뒤 "다시 정리"를 누르세요.')) return;
-  if (a.kind === 'voice') idb.del(aid).catch(() => {});
+  if (a.kind === 'voice'){ idb.del(aid).catch(() => {}); if (a.bkA) bkForget([aid]); }
   m.adds = arr(m.adds).filter(x => x !== a);
   saveMemos(); render(); openDetail(m.id); scheduleDocSync(m);
 }
@@ -1187,7 +1189,7 @@ function renderJoinStrip(){
   b.hidden = !n; if (n) b.innerHTML = `<span>🔗 자동으로 붙은 것 <b>${n}개</b></span><span>확인하기 ›</span>`;
 }
 $('#joinStrip').onclick = openChecks;
-function render(){ renderJoinStrip(); renderReview(); renderFilters(); renderList(); }
+function render(){ renderBkWarn(); renderJoinStrip(); renderReview(); renderFilters(); renderList(); }
 
 /* ---------- 시트 ---------- */
 let audioUrls = [], sheetOpener = null;
@@ -1230,6 +1232,7 @@ function commitDelete(){
   const {m, t} = pendingDel; clearTimeout(t); pendingDel = null;
   if (m.kind === 'voice') idb.del(m.id).catch(() => {});
   arr(m.adds).forEach(a => { if (a.kind === 'voice') idb.del(a.id).catch(() => {}); });
+  bkForget([m, ...arr(m.adds)].filter(x => x.kind === 'voice' && x.bkA).map(x => x.id));
   docDelete(m);
 }
 function undoDelete(){
@@ -1393,6 +1396,11 @@ $('#sheetBody').onclick = e => {
   if (act === 'loadmodels') return loadModels();
   if (act === 'gdoctest') return testDocs();
   if (act === 'gdocall') return sendAllToDocs();
+  if (act === 'bknow') return runBackup(false);
+  if (act === 'bkrestore') return restoreFromDrive();
+  if (act === 'bkhow') return openBkHow();
+  if (act === 'bkcopy') return copyScript();
+  if (act === 'bkback') return openSettings();
   if (act === 'savetext') return saveTextMemo();
   if (act === 'resetguide'){ $('#cfgGuide').value = DEFAULT_GUIDE; }
 };
@@ -1492,13 +1500,152 @@ async function testDocs(){
   }catch(e){ toast('연결 실패: ' + (e.message || e), {label:'확인', fn(){}, ms:9000}); }
 }
 
+/* ---------- 구글 드라이브 백업 ----------
+   독스 연동 스크립트(v4)를 같이 써서 내 드라이브 "누에마 메모 백업" 폴더에 올린다.
+   녹음은 파일 하나씩(올린 것은 bkA 표시), 메모 전체는 바뀌었을 때만 새 파일로 (스크립트가 최근 7개만 남김).
+   메모가 바뀌면 90초 뒤, 앱을 내릴 때(바뀐 게 있으면), 하루 한 번 앱을 열 때 자동으로 돈다.
+   폰을 잃어버려도 새 폰에서 "드라이브에서 되살리기"로 메모와 녹음을 돌려받는다 */
+const saveBk = () => store.set('nuema_bk_v1', bk);
+const bkOn = () => cfg.bkAuto !== false && gdocReady();
+/* 녹음을 가진 것 전부 — 처음 녹음한 메모와 이어서 말한 녹음. 둘 다 id 가 IndexedDB 열쇠 */
+function voiceHolders(){
+  const out = [];
+  memos.forEach(m => { if (m.kind === 'voice') out.push(m); arr(m.adds).forEach(a => { if (a.kind === 'voice') out.push(a); }); });
+  return out;
+}
+function hashStr(t){ let h = 5381; for (let i = 0; i < t.length; i++) h = (h * 33 + t.charCodeAt(i)) | 0; return t.length + ':' + h; }
+async function scriptPost(body){
+  const d = await readScriptJSON(await fetch(cfg.gdocUrl, {method:'POST', body: JSON.stringify(body)}));
+  if (!d.ok) throw new Error(d.error || '스크립트가 실패를 돌려줬습니다');
+  return d;
+}
+/* 예전 스크립트(v3)는 백업 요청을 메모로 알고 독스에 써 버리므로, 보내기 전에 버전을 꼭 확인한다 */
+async function scriptReady(){
+  if (bk.v >= 4 && Date.now() - (bk.vAt || 0) < DAY) return;
+  const d = await readScriptJSON(await fetch(cfg.gdocUrl));
+  bk.v = d.v || 0; bk.vAt = Date.now(); saveBk();
+  if (!(bk.v >= 4)) throw new Error('구글 스크립트를 v4로 바꿔야 백업됩니다 (설정 → 드라이브 백업 → 스크립트 바꾸는 방법)');
+}
+let bkBusy = false, bkTimer = null, bkPending = false;
+function scheduleBackup(ms){
+  if (!bkOn()) return;
+  bkPending = true; clearTimeout(bkTimer);
+  bkTimer = setTimeout(() => runBackup(true), ms ?? 90000);
+}
+async function runBackup(quiet){
+  if (!gdocReady()){ if (!quiet) toast('설정에서 Apps Script 웹앱 URL을 먼저 넣고 저장하세요'); return false; }
+  if (bkBusy){ if (!quiet) toast('지금 백업하는 중입니다'); return false; }
+  bkBusy = true; bkPending = false; clearTimeout(bkTimer);
+  let up = 0;
+  try{
+    await scriptReady();
+    for (const h of voiceHolders()){
+      if (h.bkA || h.noAudio) continue;
+      const blob = await idb.get(h.id).catch(() => null);
+      if (!blob) continue;
+      if (!quiet) toast(`녹음 올리는 중… ${up + 1}`);
+      await scriptPost({action:'bkAudio', id:h.id, mime: blob.type || 'audio/webm', data: await toB64(blob)});
+      h.bkA = true; up++;
+      store.set('nuema_memos_v1', memos);   // saveMemos 는 백업을 다시 예약하므로 직접 저장
+    }
+    const all = JSON.stringify(memos), hs = hashStr(all);
+    if (hs !== bk.hash){ await scriptPost({action:'bkMemos', data: JSON.stringify({v:1, at:Date.now(), memos})}); bk.hash = hs; }
+    bk.at = Date.now(); bk.err = ''; bk.audio = voiceHolders().filter(x => x.bkA).length; saveBk();
+    if (!quiet) toast(up ? `백업했습니다 (녹음 ${up}개 새로 올림)` : '백업했습니다');
+    return true;
+  }catch(e){
+    bk.err = e.message || String(e); bk.errAt = Date.now(); saveBk();
+    if (!quiet) toast('백업 실패: ' + bk.err, {label:'확인', fn(){}, ms:9000});
+    return false;
+  }finally{
+    bkBusy = false; renderBkWarn();
+    const st = $('#bkStatus'); if (st) st.textContent = bkStatusText();
+  }
+}
+function bkStatusText(){
+  if (!gdocReady()) return '위 구글 독스의 Apps Script 웹앱 URL을 넣으면 같은 스크립트로 백업합니다.';
+  const fail = bk.err && (!bk.at || bk.errAt > bk.at) ? ` · 최근 실패: ${bk.err}` : '';
+  return bk.at ? `마지막 백업: ${fmtDate(bk.at)} · 드라이브에 녹음 ${bk.audio || 0}개${fail}` : bk.err ? `백업 실패: ${bk.err}` : '아직 백업하지 않았습니다.';
+}
+/* 목록 위 경고 — 사라지는 알림 대신 백업이 될 때까지 남아 있다 */
+function renderBkWarn(){
+  const b = $('#bkWarn'); let msg = '';
+  if (cfg.bkAuto !== false && memos.length){
+    const gap = Date.now() - (bk.at || 0);
+    if (!gdocReady()) msg = '드라이브 백업이 아직 설정되지 않았어요';
+    else if (!bk.at) msg = bk.err ? '드라이브 백업이 안 되고 있어요' : '';
+    else if (gap > 7 * DAY) msg = `${Math.floor(gap / DAY)}일째 백업이 안 됐어요`;
+  }
+  b.hidden = !msg; if (msg) b.innerHTML = `<span>⚠️ ${msg}</span><span>설정 ›</span>`;
+}
+$('#bkWarn').onclick = () => { openSettings(); const st = $('#bkStatus'); if (st) st.scrollIntoView({block:'center'}); };
+/* 지운 메모의 녹음은 드라이브에서도 휴지통으로 (30일 동안은 드라이브에서 되살릴 수 있음) */
+function bkForget(ids){
+  ids = ids.filter(Boolean);
+  if (ids.length && gdocReady() && bk.v >= 4) scriptPost({action:'bkDelete', ids}).catch(() => {});
+}
+async function restoreFromDrive(){
+  if (!gdocReady()){ toast('Apps Script 웹앱 URL을 먼저 넣고 저장하세요'); return; }
+  if (!confirm('드라이브의 가장 최근 백업에서 메모와 녹음을 되살릴까요?\n이 폰에 이미 있는 메모는 그대로 두고, 없는 것만 더합니다.')) return;
+  closeSheet(); toast('드라이브에서 백업을 받는 중…');
+  try{
+    await scriptReady();
+    const d = await scriptPost({action:'bkRestore'});
+    const have = new Set(memos.map(m => m.id));
+    const add = arr(JSON.parse(d.data).memos).filter(m => m && m.id && !have.has(m.id)).map(normalizeMemo);
+    memos = [...memos, ...add].sort((a, b) => b.created - a.created);
+    store.set('nuema_memos_v1', memos); render();
+    // 녹음: 드라이브에 올라가 있는데 이 폰에 없는 것만 받는다. 안 올라간 채 백업된 녹음은 원본 없음으로 표시
+    const need = [];
+    for (const h of voiceHolders()){
+      if (await idb.get(h.id).catch(() => null)) continue;
+      if (h.bkA) need.push(h); else h.noAudio = true;
+    }
+    let got = 0, fail = 0;
+    for (const h of need){
+      toast(`녹음 받는 중… ${got + fail + 1}/${need.length}`);
+      try{
+        const r = await scriptPost({action:'bkAudioGet', id:h.id});
+        const bin = atob(r.data), u8 = new Uint8Array(bin.length);
+        for (let i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i);
+        await idb.put(h.id, new Blob([u8], {type: r.mime || 'audio/webm'}));
+        delete h.noAudio; got++;
+      }catch(e){ h.noAudio = true; fail++; }
+    }
+    saveMemos(); render();
+    toast(`메모 ${add.length}개, 녹음 ${got}개를 되살렸습니다${fail ? ` (녹음 ${fail}개는 못 받음)` : ''}`, {label:'확인', fn(){}, ms:9000});
+  }catch(e){ toast('되살리지 못했습니다: ' + (e.message || e), {label:'확인', fn(){}, ms:9000}); }
+}
+function openBkHow(){
+  openId = null; freeAudio();
+  showSheet(`<h2>스크립트를 v4로 바꾸기</h2>
+    <p class="hint">한 번만 하면 됩니다. URL은 그대로라 앱 설정은 안 바꿔도 됩니다.</p>
+    <ol class="steps">
+      <li>아래 <b>스크립트 코드 복사</b>를 누릅니다</li>
+      <li>컴퓨터에서 script.google.com → 누에마 메모 프로젝트를 열고, 코드를 <b>전부 지운 뒤 붙여넣고 저장</b>(💾)</li>
+      <li>위쪽 함수 고르는 칸에서 <b>setupBackup</b> → <b>▷ 실행</b> → 권한 검토 → 내 계정 → (확인되지 않은 앱이면 "고급" → "이동") → 허용</li>
+      <li><b>배포 → 배포 관리 → 연필(수정) → 버전: 새 버전 → 배포</b> ("새 배포"는 누르지 않기)</li>
+      <li>앱으로 돌아와 설정 → <b>지금 백업</b></li>
+    </ol>
+    <div class="actions"><button class="btn primary" data-act="bkcopy">스크립트 코드 복사</button><button class="btn" data-act="bkback">돌아가기</button></div>`);
+}
+async function copyScript(){
+  try{
+    const res = await fetch('google-docs-sync.gs?' + Date.now());
+    if (!res.ok) throw new Error(res.status);
+    toast(await copyText(await res.text()) ? '스크립트 코드를 복사했습니다' : '복사에 실패했습니다');
+  }catch(e){ toast('스크립트 파일을 받지 못했습니다'); }
+}
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden' && bkPending && bkOn()) runBackup(true); });
+
 /* 정리 끝난 녹음 원본만 일괄 삭제 — 받아쓴 글과 정리 결과는 그대로 */
 async function purgeAudio(){
   // 처음 녹음(메모)과 이어서 말한 녹음(add) 모두 — 받아쓰기가 끝난 것만
   const targets = memos.filter(m => m.kind === 'voice' && m.status === 'done' && !m.noAudio);
   memos.forEach(m => arr(m.adds).forEach(a => { if (a.kind === 'voice' && a.status === 'done' && !a.noAudio) targets.push(a); }));
   if (!targets.length){ toast('지울 녹음 원본이 없습니다'); return; }
-  if (!confirm(`정리 완료된 녹음 원본 ${targets.length}개를 지울까요?\n받아쓴 글과 정리 내용은 그대로 남지만, 다시 정리하기는 할 수 없게 됩니다.`)) return;
+  const notUp = targets.filter(x => !x.bkA).length;
+  if (!confirm(`정리 완료된 녹음 원본 ${targets.length}개를 이 폰에서 지울까요?\n받아쓴 글과 정리 내용은 그대로 남지만, 다시 정리하기는 할 수 없게 됩니다.\n${notUp ? `⚠️ 그중 ${notUp}개는 드라이브에 백업되지 않아 완전히 사라집니다.` : '모두 드라이브에 백업돼 있어 "드라이브에서 되살리기"로 다시 받을 수 있습니다.'}`)) return;
   let n = 0;
   for (const x of targets){ try{ await idb.del(x.id); x.noAudio = true; n++; }catch(e){} }
   saveMemos(); render(); closeSheet(); toast(`녹음 원본 ${n}개를 지웠습니다`);
@@ -1548,6 +1695,14 @@ function openSettings(){
       <button class="link-btn" data-act="gdocall">안 보낸 메모 모두 보내기</button>
     </div>
     <label class="check"><input type="checkbox" id="cfgGdocAuto" ${cfg.gdocAuto === false ? '' : 'checked'}> 정리가 끝나면 자동으로 보내기</label>
+    <h3>드라이브 백업</h3>
+    <p class="hint" id="bkStatus">${esc(bkStatusText())}</p>
+    <label class="check"><input type="checkbox" id="cfgBkAuto" ${cfg.bkAuto === false ? '' : 'checked'}> 자동으로 백업 — 메모와 녹음을 내 드라이브 "누에마 메모 백업" 폴더에</label>
+    <div class="row">
+      <button class="link-btn" data-act="bknow">지금 백업</button>
+      <button class="link-btn" data-act="bkrestore">드라이브에서 되살리기</button>
+      <button class="link-btn" data-act="bkhow">스크립트 바꾸는 방법</button>
+    </div>
     <div class="actions">
       <button class="btn primary" data-act="savecfg">저장</button>
       <button class="btn" data-act="export">백업 내보내기</button>
@@ -1598,7 +1753,7 @@ async function loadModels(){
     if (!list.length) throw new Error('쓸 수 있는 모델이 없습니다');
     // 지금 입력 중인 값을 잃지 않게 먼저 담아 두고 설정 화면을 다시 그린다
     cfg.key = key; cfg.model = currentModelInput(); cfg.guide = $('#cfgGuide').value.trim(); cfg.fallback = $('#cfgFallback').checked; cfg.autoJoin = $('#cfgAutoJoin').checked;
-    cfg.gdocUrl = $('#cfgGdoc').value.trim(); cfg.gdocAuto = $('#cfgGdocAuto').checked;
+    cfg.gdocUrl = $('#cfgGdoc').value.trim(); cfg.gdocAuto = $('#cfgGdocAuto').checked; cfg.bkAuto = $('#cfgBkAuto').checked;
     cfg.models = list; cfg.modelsAt = Date.now();
     store.set('nuema_cfg_v1', cfg);
     openSettings(); toast(`모델 ${list.length}개를 불러왔습니다`);
@@ -1612,8 +1767,11 @@ function saveSettings(){
   cfg.autoJoin = $('#cfgAutoJoin').checked;
   cfg.gdocUrl = $('#cfgGdoc').value.trim();
   cfg.gdocAuto = $('#cfgGdocAuto').checked;
+  cfg.bkAuto = $('#cfgBkAuto').checked;
+  if (cfg.gdocUrl !== bk.url){ bk.url = cfg.gdocUrl; bk.vAt = 0; bk.hash = ''; saveBk(); }   // 스크립트가 바뀌면 버전·내용을 다시 확인
   store.set('nuema_cfg_v1', cfg);
-  closeSheet(); toast('저장했습니다');
+  closeSheet(); toast('저장했습니다'); render();
+  scheduleBackup(3000);
 }
 function exportJSON(){
   const blob = new Blob([JSON.stringify({v:1, memos}, null, 2)], {type:'application/json'});
@@ -1843,6 +2001,7 @@ saveMemos();
 render();
 if (location.hash === '#knot') showTab('knot');
 if (!cfg.key) setTimeout(() => toast('설정에서 Gemini API 키를 먼저 입력하세요'), 600);
+if (bkOn() && Date.now() - (bk.at || 0) > DAY) setTimeout(() => runBackup(true), 5000);   // 하루 한 번은 꼭
 /* 홈 화면 아이콘을 길게 눌러 나오는 바로가기 (manifest.json 의 shortcuts)
    ?rec=1 → 열자마자 녹음 시작, ?text=1 → 글로 적기. 새로고침 때 다시 시작되지 않게 주소에서 지운다 */
 (() => {

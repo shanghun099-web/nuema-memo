@@ -1,7 +1,8 @@
 # 누에마 메모
 
 떠오른 생각을 말로 남기면 Gemini가 받아쓰고 정리해 주는 아이디어 메모.
-단일 HTML 파일이며, 데이터는 브라우저(localStorage / IndexedDB)에만 저장됩니다.
+단일 HTML 파일이며, 데이터는 브라우저(localStorage / IndexedDB)에 저장되고
+구글 Apps Script(v4)를 연결하면 내 드라이브 "누에마 메모 백업" 폴더에 메모와 녹음이 자동 백업됩니다.
 
 - 열기: https://shanghun099-web.github.io/nuema-memo/
 - 설정에서 Gemini API 키를 입력해야 정리 기능이 동작합니다. 키는 이 기기 브라우저에만 저장됩니다.
