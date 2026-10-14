@@ -88,6 +88,17 @@ textarea.essay{min-height:200px;font-family:var(--serif)}
 .take{display:flex;align-items:center;gap:4px;border:1px solid var(--line-2);border-radius:999px;padding:3px 10px 3px 4px;font-size:.8rem;background:var(--paper)}
 .take.pick{border-color:var(--ink);background:var(--ink);color:var(--paper)}
 .take button{background:none;border:none;padding:2px 4px;font-size:.82rem;color:inherit}
+.take small{font-size:.7rem;opacity:.75}
+.take.odd{border-color:var(--shu);color:var(--shu)}
+.take.odd.pick{background:var(--shu);color:#fff}
+.line .st.warn{color:var(--shu)}
+.tg{display:flex;gap:8px;align-items:center;font-size:.84rem;margin-top:10px}
+.tg small{color:var(--ink-3)}
+.sl{display:flex;align-items:center;gap:6px;margin-top:10px}
+.sl-n{font-size:.8rem;color:var(--ink-2);width:76px;flex:none}
+.sl input[type=range]{flex:1;min-width:0;accent-color:var(--ink)}
+.sl output{font-size:.84rem;width:52px;text-align:right;flex:none;font-variant-numeric:tabular-nums}
+.btn.sm{min-height:30px;width:30px;padding:0;flex:none}
 .play{width:28px;height:28px;border-radius:50%;border:1px solid currentColor !important;display:grid;place-items:center;font-size:.7rem !important}
 .err{font-size:.78rem;color:var(--shu);margin-top:4px;word-break:break-all}
 .busy{opacity:.55;pointer-events:none}
@@ -201,14 +212,21 @@ dialog h3{font-family:var(--serif);font-weight:400;margin:0 0 6px}
         <option value="at a slightly brisk pace">조금 빠르게</option>
       </select>
     </div>
-    <div class="row" style="margin-top:10px">
-      <label style="font-size:.84rem;display:flex;gap:6px;align-items:center"><input type="checkbox" id="bySentence" checked> 문장마다 나누기</label>
-      <button class="btn main" id="splitBtn" style="margin-left:auto">줄 나누기</button>
+    <label class="f" for="unit">한 번에 읽힐 크기</label>
+    <div class="row">
+      <select id="unit">
+        <option value="para">문단마다 — 추천 (목소리가 고르고, 문단만 다시 만들 수 있음)</option>
+        <option value="all">통째로 한 번에 — 목소리가 가장 고름 (다시 만들면 전체)</option>
+        <option value="line">줄마다</option>
+        <option value="sentence">문장마다 — 고치기 쉽지만 목소리가 흔들리기 쉬움</option>
+      </select>
+      <button class="btn main" id="splitBtn">나누기</button>
     </div>
+    <p class="hint">따로 만든 조각은 매번 목소리가 조금씩 달라집니다. 한 번에 길게 읽힐수록 한 사람 목소리로 이어집니다.</p>
     <details class="how">
       <summary>말투 넣는 요령</summary>
       <ol>
-        <li>줄마다 아래 칸에서 '따뜻하게', '속삭이듯' 같은 말투를 고릅니다. 직접 적어도 됩니다.</li>
+        <li>줄마다 아래 칸에서 '따뜻하게', '속삭이듯' 같은 말투를 고릅니다. 직접 적어도 됩니다. 말투를 줄마다 크게 바꾸면 목소리도 달라 보일 수 있으니, 고른 목소리가 중요하면 '전체 말투' 하나만 쓰세요.</li>
         <li>문장 안에 <b>&lt;short pause&gt;</b>, <b>&lt;long pause&gt;</b> 를 넣으면 그 자리에서 쉽니다. <b>&lt;sigh&gt;</b>(한숨), <b>&lt;breath&gt;</b>(숨) 도 됩니다.</li>
         <li>힘줄 낱말은 따옴표보다 말투 칸에 "'바다'를 힘주어" 처럼 적는 게 잘 됩니다.</li>
       </ol>
@@ -228,12 +246,44 @@ dialog h3{font-family:var(--serif);font-weight:400;margin:0 0 6px}
     <div class="bar"><i id="barFill"></i></div>
     <div class="clip" id="progress"></div>
     <div class="clip" id="costLine"></div>
-    <label class="f" for="gap">문장 사이 쉼</label>
-    <select id="gap">
-      <option value="0.3">짧게 (0.3초)</option>
-      <option value="0.5" selected>보통 (0.5초)</option>
-      <option value="0.8">길게 (0.8초)</option>
-    </select>
+
+    <div class="panel">
+      <h3>목소리 고르게</h3>
+      <p class="hint" style="margin-top:0">조각마다 목소리 높이를 재서, 다른 조각과 많이 다른 것은 <b style="color:var(--shu)">튐</b>으로 표시합니다. 번호 옆 % 는 전체 평균보다 얼마나 높은지(+)·낮은지(−)입니다.</p>
+      <div class="clip" id="consInfo"></div>
+      <div class="row" style="margin-top:8px">
+        <button class="btn" id="pickClosest">가장 비슷한 것으로 고르기</button>
+        <button class="btn" id="redoOdd">튀는 조각만 다시 만들기</button>
+      </div>
+      <label class="tg"><input type="checkbox" id="evenPitch"> 합칠 때 목소리 높이 맞추기 <small>(평균에 가깝게, 최대 ±8%)</small></label>
+      <label class="tg"><input type="checkbox" id="evenLoud"> 합칠 때 소리 크기 맞추기</label>
+    </div>
+
+    <div class="panel">
+      <h3>빠르기 · 쉼</h3>
+      <div class="sl">
+        <span class="sl-n">전체 빠르기</span>
+        <button class="btn sm" data-nudge="speed" data-d="-0.01" aria-label="조금 느리게">−</button>
+        <input type="range" id="speed" min="0.7" max="1.3" step="0.01">
+        <button class="btn sm" data-nudge="speed" data-d="0.01" aria-label="조금 빠르게">+</button>
+        <output id="speedOut"></output>
+      </div>
+      <div class="sl">
+        <span class="sl-n">문장 사이 쉼</span>
+        <button class="btn sm" data-nudge="gap" data-d="-0.05" aria-label="쉼 줄이기">−</button>
+        <input type="range" id="gap" min="0" max="1.5" step="0.05">
+        <button class="btn sm" data-nudge="gap" data-d="0.05" aria-label="쉼 늘리기">+</button>
+        <output id="gapOut"></output>
+      </div>
+      <div class="sl">
+        <span class="sl-n">문단 사이 쉼</span>
+        <button class="btn sm" data-nudge="pgap" data-d="-0.1" aria-label="쉼 줄이기">−</button>
+        <input type="range" id="pgap" min="0" max="3" step="0.1">
+        <button class="btn sm" data-nudge="pgap" data-d="0.1" aria-label="쉼 늘리기">+</button>
+        <output id="pgapOut"></output>
+      </div>
+      <p class="hint">빠르기를 바꿔도 목소리 높이는 그대로입니다. 조각마다 따로 빠르기를 주려면 각 조각의 '빠르기' 칸을 고르세요. 한 번 합친 뒤에는 움직이면 바로 다시 합쳐집니다.</p>
+    </div>
     <div class="sticky">
       <div class="row">
         <button class="btn main" id="joinBtn">합쳐서 듣기</button>
@@ -306,9 +356,12 @@ let st = Object.assign({
   voice: {kind: 'base', id: 'Charon', name: 'Charon', model: ''},
   mine: [],                 // [{id, name, kind:'prompted'|'replicated', model, at}]
   model: 'gemini-3.8-flash-tts',
-  script: '', baseStyle: DEFAULT_BASE, pace: '', bySentence: true, gap: '0.5',
-  lines: []                 // [{id, text, mood, extra, para, takes:[takeId], pick}]
+  script: '', baseStyle: DEFAULT_BASE, pace: '', unit: 'para', gap: '0.5', pgap: 1.2,
+  speed: 1, evenPitch: true, evenLoud: true,
+  info: {},                 // takeId → {f0 목소리 높이 Hz, db 소리 크기, text 만들 때 글}
+  lines: []                 // [{id, text, mood, extra, speed, para, takes:[takeId], pick}]
 }, store.get('nuema_voice_v1', {}));
+if (!st.info) st.info = {};
 const save = () => store.set('nuema_voice_v1', st);
 // 키는 누에마 메모 설정(nuema_cfg_v1)과 같이 쓴다. 메모 탭에서 바꿨을 수 있으니 매번 새로 읽는다
 const memoCfg = () => store.get('nuema_cfg_v1', {});
@@ -371,6 +424,81 @@ function playPcm(pcm){
   playingUrl = URL.createObjectURL(wavBlob(pcm)); player.src = playingUrl; player.play().catch(() => {});
 }
 const secs = pcm => pcm.length / SR;
+const median = a => { if (!a.length) return 0; const s = a.slice().sort((x, y) => x - y), m = s.length >> 1; return s.length & 1 ? s[m] : (s[m - 1] + s[m]) / 2; };
+
+/* ---------- 목소리 재기 · 고르게 하기 ---------- */
+// 목소리 높이(기본 주파수 f0)와 소리 크기를 잰다. 8kHz 로 줄여 40ms 창마다 자기상관으로 높이를 찾고, 말하는 구간만 모아 중앙값.
+function analyze(pcm){
+  const D = 3, n = Math.floor(pcm.length / D), x = new Float32Array(n);
+  for (let i = 0; i < n; i++) x[i] = (pcm[i * D] + pcm[i * D + 1] + pcm[i * D + 2]) / 98304;
+  const W = 320, H = 160, minL = 20, maxL = 134;   // 400Hz ~ 60Hz
+  const rms = [];
+  for (let s = 0; s + W <= n; s += H){ let e = 0; for (let i = 0; i < W; i++) e += x[s + i] * x[s + i]; rms.push(Math.sqrt(e / W)); }
+  const top = Math.max(0, ...rms), f0s = [], loud = [];
+  rms.forEach((r, k) => {
+    if (r < 0.01 || r < top * 0.15) return;
+    loud.push(r);
+    const s = k * H; if (s + W + maxL > n) return;
+    let e0 = 0; for (let i = 0; i < W; i++) e0 += x[s + i] * x[s + i];
+    const c = new Float32Array(maxL + 2); let best = 0;
+    for (let L = minL; L <= maxL + 1; L++){ let v = 0; for (let i = 0; i < W; i++) v += x[s + i] * x[s + i + L]; c[L] = v / e0; if (L <= maxL && c[L] > best) best = c[L]; }
+    if (best < 0.5) return;   // 숨소리·자음 같은 높이 없는 소리는 뺀다
+    for (let L = minL + 1; L <= maxL; L++){   // 한 옥타브 낮게 잘못 잡지 않게, 충분히 큰 첫 봉우리를 쓴다
+      if (c[L] >= best * 0.88 && c[L] >= c[L - 1] && c[L] >= c[L + 1]){
+        const a = c[L - 1], b = c[L], d = c[L + 1], den = a - 2 * b + d, off = den ? 0.5 * (a - d) / den : 0;
+        f0s.push(8000 / (L + off)); break;
+      }
+    }
+  });
+  return {f0: f0s.length >= 5 ? Math.round(median(f0s) * 10) / 10 : 0, db: loud.length ? Math.round(20 * Math.log10(median(loud)) * 10) / 10 : -99};
+}
+// 길이만 바꾸고 높이는 그대로 (WSOLA). ratio = 나올 길이 / 원래 길이
+function stretch(x, ratio){
+  if (Math.abs(ratio - 1) < 0.003 || x.length < 2000) return x;
+  const N = 960, Hs = 480, Ha = Hs / ratio, tol = 240;
+  const outLen = Math.round(x.length * ratio), out = new Float32Array(outLen + N), ws = new Float32Array(outLen + N);
+  const w = new Float32Array(N); for (let i = 0; i < N; i++) w[i] = 0.5 - 0.5 * Math.cos(2 * Math.PI * i / N);
+  let prev = 0;
+  for (let k = 0; k * Hs < outLen; k++){
+    let ip = Math.round(k * Ha);
+    if (k > 0){   // 앞 조각이 자연스럽게 이어질 자리와 가장 닮은 곳을 ±10ms 안에서 찾는다
+      const nat = prev + Hs, lo = Math.max(0, ip - tol), hi = Math.min(x.length - N, ip + tol);
+      if (hi >= lo && nat + Hs < x.length){
+        let bv = -Infinity, best = lo;
+        for (let c = lo; c <= hi; c += 2){ let v = 0; for (let i = 0; i < Hs; i += 4) v += x[nat + i] * x[c + i]; if (v > bv){ bv = v; best = c; } }
+        ip = best;
+      }
+    }
+    ip = Math.max(0, Math.min(ip, x.length - 1));
+    const op = k * Hs;
+    for (let i = 0; i < N; i++){ const v = ip + i < x.length ? x[ip + i] : 0; out[op + i] += v * w[i]; ws[op + i] += w[i]; }
+    prev = ip;
+  }
+  const y = new Float32Array(outLen);
+  for (let i = 0; i < outLen; i++) y[i] = ws[i] > 1e-3 ? out[i] / ws[i] : out[i];
+  return y;
+}
+// p 배 빠르게 읽기 = 높이 p 배 (길이는 1/p)
+function resampleF(x, p){
+  const n = Math.floor(x.length / p), y = new Float32Array(n);
+  for (let i = 0; i < n; i++){ const t = i * p, j = Math.floor(t), f = t - j; y[i] = x[j] * (1 - f) + (j + 1 < x.length ? x[j + 1] : x[j]) * f; }
+  return y;
+}
+// 높이 pitch 배, 빠르기 speed 배 (둘 다 1 이면 그대로)
+function reshape(pcm, pitch, speed){
+  let x = new Float32Array(pcm.length); for (let i = 0; i < pcm.length; i++) x[i] = pcm[i] / 32768;
+  if (Math.abs(pitch - 1) > 0.004) x = resampleF(x, pitch); else pitch = 1;
+  return stretch(x, (pcm.length / speed) / x.length);
+}
+const ODD = 0.06;   // 평균보다 6% 넘게 높거나 낮으면 '튐' (반음 정도)
+// 기준 높이: 고른 조각들의 중앙값 (고른 게 적으면 모든 조각)
+function refF0(){
+  const of = ids => ids.map(t => st.info[t] && st.info[t].f0).filter(Boolean);
+  const picked = of(st.lines.map(l => l.pick).filter(Boolean));
+  return median(picked.length >= 3 ? picked : of(st.lines.flatMap(l => l.takes)));
+}
+function devOf(t, ref){ const f = st.info[t] && st.info[t].f0; return f && ref ? f / ref - 1 : null; }
+const pct = d => (d >= 0 ? '+' : '−') + Math.abs(Math.round(d * 100)) + '%';
 const fmtSec = s => s >= 60 ? `${Math.floor(s / 60)}분 ${Math.round(s % 60)}초` : `${s.toFixed(1)}초`;
 
 /* ---------- Gemini 호출 ---------- */
@@ -401,8 +529,11 @@ function findAudio(j){
   })(j);
   return found;
 }
+// 조각을 따로 만들어도 한 사람처럼 들리게, 모든 요청 맨 앞에 같은 목소리 유지 지시를 넣는다
+const ANCHOR = 'one consistent narrator for the whole piece: keep exactly the same voice, timbre, pitch range and loudness as every other part';
 function styleFor(line){
-  const parts = [str($('#baseStyle').value), line ? line.mood : '', line ? str(line.extra) : '', $('#pace').value].filter(Boolean);
+  const mood = line && line.mood ? `only a subtle shift in feeling, same voice: ${line.mood}` : '';
+  const parts = [ANCHOR, str($('#baseStyle').value), mood, line ? str(line.extra) : '', $('#pace').value].filter(Boolean);
   return parts.join('; ');
 }
 function voiceModel(){ return st.voice.kind === 'base' ? st.model : (st.voice.model || st.model); }
@@ -571,25 +702,30 @@ $('#tryBtn').onclick = () => busy($('#tryBtn'), '만드는 중…', async () => 
 });
 
 /* ---------- ② 원고 → 줄 ---------- */
-function splitScript(text, bySentence){
-  const out = [];
-  text.replace(/\r/g, '').split(/\n\s*\n+/).forEach(par => {
+// unit: para 문단마다 · all 통째로 · line 줄마다 · sentence 문장마다
+function splitScript(text, unit){
+  const out = [], add = (p, para) => out.push({id: uid(), text: p, mood: '', extra: '', speed: 1, para: para && out.length > 0, takes: [], pick: null});
+  const pars = text.replace(/\r/g, '').split(/\n\s*\n+/).map(p => p.split('\n').map(s => s.trim()).filter(Boolean)).filter(p => p.length);
+  if (unit === 'all'){ add(pars.map(p => p.join('\n')).join('\n\n'), false); return out; }
+  pars.forEach(par => {
+    if (unit === 'para'){ add(par.join('\n'), true); return; }
     let first = true;
-    par.split('\n').map(s => s.trim()).filter(Boolean).forEach(l => {
-      const pieces = bySentence ? (l.match(/[^.!?…。]+(?:[.!?…。]+["'”’」)]*|$)/g) || [l]).map(s => s.trim()).filter(Boolean) : [l];
-      pieces.forEach(p => { out.push({id: uid(), text: p, mood: '', extra: '', para: first && out.length > 0, takes: [], pick: null}); first = false; });
+    par.forEach(l => {
+      const pieces = unit === 'sentence' ? (l.match(/[^.!?…。]+(?:[.!?…。]+["'”’」)]*|$)/g) || [l]).map(s => s.trim()).filter(Boolean) : [l];
+      pieces.forEach(p => { add(p, first); first = false; });
     });
   });
   return out;
 }
+function dropTakes(ids){ ids.forEach(t => { idb.del('take:' + t); cache.delete(t); delete st.info[t]; }); }
 $('#splitBtn').onclick = async () => {
   const text = $('#script').value;
   if (!str(text)) return toast('원고를 먼저 붙여 넣으세요');
   if (st.lines.some(l => l.takes.length) && !confirm('이미 만든 소리가 있습니다. 다시 나누면 지워집니다. 계속할까요?')) return;
-  for (const l of st.lines) for (const t of l.takes) idb.del('take:' + t);
-  st.lines = splitScript(text, $('#bySentence').checked);
+  dropTakes(st.lines.flatMap(l => l.takes));
+  st.lines = splitScript(text, $('#unit').value);
   save(); renderLines();
-  toast(`${st.lines.length}줄로 나눴습니다`);
+  toast(`${st.lines.length}조각으로 나눴습니다`);
 };
 $('#fromKnot').onclick = () => {
   const k = store.get('nuema_knot_v1', {});
@@ -598,18 +734,44 @@ $('#fromKnot').onclick = () => {
 };
 ['script', 'baseStyle'].forEach(id => $('#' + id).addEventListener('input', e => { st[id] = e.target.value; save(); }));
 $('#pace').onchange = e => { st.pace = e.target.value; save(); };
-$('#bySentence').onchange = e => { st.bySentence = e.target.checked; save(); };
-$('#gap').onchange = e => { st.gap = e.target.value; save(); };
+$('#unit').onchange = e => { st.unit = e.target.value; save(); };
+// 빠르기·쉼 밀대: 값 표시 → 저장 → 이미 합쳤으면 잠시 뒤 다시 합치기
+const SLIDERS = {speed: v => v.toFixed(2) + '배', gap: v => v.toFixed(2) + '초', pgap: v => v.toFixed(1) + '초'};
+function showSliders(){ for (const k in SLIDERS){ $('#' + k).value = st[k]; $('#' + k + 'Out').textContent = SLIDERS[k](parseFloat(st[k])); } }
+let rejoinT;
+function settingChanged(){
+  save(); if (!lastJoin) return;
+  clearTimeout(rejoinT);
+  rejoinT = setTimeout(function again(){ if (joining) rejoinT = setTimeout(again, 300); else $('#joinBtn').click(); }, 450);
+}
+for (const k in SLIDERS) $('#' + k).addEventListener('input', e => { st[k] = parseFloat(e.target.value); showSliders(); settingChanged(); });
+document.querySelectorAll('[data-nudge]').forEach(b => b.onclick = () => {
+  const el = $('#' + b.dataset.nudge), v = Math.min(+el.max, Math.max(+el.min, parseFloat(st[b.dataset.nudge]) + parseFloat(b.dataset.d)));
+  st[b.dataset.nudge] = Math.round(v * 100) / 100; showSliders(); settingChanged();
+});
+['evenPitch', 'evenLoud'].forEach(k => $('#' + k).onchange = e => { st[k] = e.target.checked; settingChanged(); });
 
 const lineState = {};   // id → '만드는 중' 등 화면용
-function lineHtml(l, i){
+const LINE_SPEEDS = [0.8, 0.85, 0.9, 0.95, 1, 1.05, 1.1, 1.15, 1.2];
+function lineHtml(l, i, ref = refF0()){
   const s = lineState[l.id] || {};
-  const takes = l.takes.map((t, k) => `<span class="take ${l.pick === t ? 'pick' : ''}" data-take="${t}"><button class="play" data-act="play" aria-label="듣기">▶</button><button data-act="pick">${k + 1}번${l.pick === t ? ' ✓' : ''}</button></span>`).join('');
+  const takes = l.takes.map((t, k) => {
+    const d = devOf(t, ref), odd = d != null && Math.abs(d) > ODD;
+    return `<span class="take ${l.pick === t ? 'pick' : ''} ${odd ? 'odd' : ''}" data-take="${t}"><button class="play" data-act="play" aria-label="듣기">▶</button><button data-act="pick">${k + 1}번${l.pick === t ? ' ✓' : ''}${d != null ? ` <small>${pct(d)}</small>` : ''}</button></span>`;
+  }).join('');
+  // 상태: 만드는 중 등 > 글이 바뀜 > 목소리 튐
+  let msg = s.msg, cls = s.cls || '';
+  const pi = l.pick && st.info[l.pick], pd = l.pick ? devOf(l.pick, ref) : null;
+  if (!msg && pi && pi.text != null && pi.text !== l.text){ msg = '글이 바뀜 — 다시 만들기 필요'; cls = 'warn'; }
+  else if (!msg && pd != null && Math.abs(pd) > ODD){ msg = `목소리 튐 (높이 ${pct(pd)})`; cls = 'warn'; }
+  if (!msg && !l.takes.length) msg = '아직 없음';
+  const sp = l.speed || 1, rows = Math.min(10, Math.max(2, Math.ceil(l.text.length / 26) + (l.text.match(/\n/g) || []).length));
   return `<div class="line ${l.para ? 'para' : ''}" data-id="${l.id}">
-    <div class="top"><span class="no">${i + 1}</span><span class="st ${s.cls || ''}">${esc(s.msg || (l.takes.length ? '' : '아직 없음'))}</span></div>
-    <textarea class="tx" rows="2" data-f="text">${esc(l.text)}</textarea>
+    <div class="top"><span class="no">${i + 1}</span><span class="st ${cls}">${esc(msg || '')}</span></div>
+    <textarea class="tx" rows="${rows}" data-f="text">${esc(l.text)}</textarea>
     <div class="opts">
       <select data-f="mood" aria-label="말투">${MOODS.map(([v, n]) => `<option value="${esc(v)}" ${l.mood === v ? 'selected' : ''}>${n}</option>`).join('')}</select>
+      <select data-f="speed" aria-label="이 조각 빠르기" style="flex:none;min-width:0">${LINE_SPEEDS.map(v => `<option value="${v}" ${sp === v ? 'selected' : ''}>${v === 1 ? '빠르기 보통' : '빠르기 ' + v.toFixed(2) + '배'}</option>`).join('')}</select>
       <input type="text" data-f="extra" value="${esc(l.extra)}" placeholder="직접 적기 (예: 끝을 흐리듯)">
     </div>
     <div class="takes">${takes}<button class="btn" data-act="make" style="min-height:30px;padding:3px 12px">${l.takes.length ? '↻ 다시 만들기' : '만들기'}</button>${l.takes.length > 1 ? '<button class="btn warn" data-act="trim" style="min-height:30px;padding:3px 8px">고른 것만 남기기</button>' : ''}</div>
@@ -617,10 +779,13 @@ function lineHtml(l, i){
   </div>`;
 }
 function renderLines(){
-  $('#lines').innerHTML = st.lines.map(lineHtml).join('');
+  const ref = refF0();
+  $('#lines').innerHTML = st.lines.map((l, i) => lineHtml(l, i, ref)).join('');
   $('#makeStep').hidden = !st.lines.length;
   updateProgress();
 }
+// 기준 높이는 조각 하나가 바뀌어도 움직이므로, 모든 조각의 표시만 새로 그린다 (고치는 중인 글 칸은 그대로)
+function refreshAll(){ st.lines.forEach(renderLine); }
 function renderLine(l){
   const el = document.querySelector(`.line[data-id="${l.id}"]`); if (!el) return;
   const focused = document.activeElement && el.contains(document.activeElement);
@@ -639,16 +804,18 @@ function renderLine(l){
 $('#lines').addEventListener('input', e => {
   const f = e.target.dataset.f; if (!f) return;
   const l = st.lines.find(x => x.id === e.target.closest('.line').dataset.id);
+  if (f === 'speed'){ l.speed = parseFloat(e.target.value) || 1; settingChanged(); return; }
   l[f] = e.target.value; save();
+  if (f === 'text') renderLine(l);   // '글이 바뀜' 표시
 });
 $('#lines').addEventListener('click', async e => {
   const b = e.target.closest('button'); if (!b) return;
   const l = st.lines.find(x => x.id === b.closest('.line').dataset.id);
   const t = b.closest('[data-take]') && b.closest('[data-take]').dataset.take;
   if (b.dataset.act === 'play'){ const p = await getTake(t); if (p) playPcm(p); else toast('소리를 찾지 못했습니다'); }
-  if (b.dataset.act === 'pick'){ l.pick = t; save(); renderLine(l); const p = await getTake(t); if (p) playPcm(p); }
+  if (b.dataset.act === 'pick'){ l.pick = t; save(); refreshAll(); const p = await getTake(t); if (p) playPcm(p); }
   if (b.dataset.act === 'make') makeLine(l, true);
-  if (b.dataset.act === 'trim'){ l.takes.filter(x => x !== l.pick).forEach(x => idb.del('take:' + x)); l.takes = [l.pick]; save(); renderLine(l); }
+  if (b.dataset.act === 'trim'){ dropTakes(l.takes.filter(x => x !== l.pick)); l.takes = [l.pick]; save(); refreshAll(); }
 });
 
 /* ---------- ③ 만들기 ---------- */
@@ -667,8 +834,9 @@ async function makeLine(l, play){
       const id = uid();
       await idb.set('take:' + id, pcm.buffer.slice(0));
       cache.set(id, pcm);
+      st.info[id] = Object.assign(analyze(pcm), {text: l.text});
       l.takes.push(id); l.pick = id; save();
-      lineState[l.id] = {msg: fmtSec(secs(pcm)), cls: 'ok'}; renderLine(l);
+      lineState[l.id] = {}; refreshAll();
       if (play) playPcm(pcm);
       return true;
     }catch(e){
@@ -689,38 +857,86 @@ async function makeMany(list){
   await Promise.all([worker(), worker()]);   // 두 줄씩 동시에
   running = false; $('#stopBtn').hidden = true;
   $('#makeAll').disabled = $('#makeAgain').disabled = false;
-  toast(stopFlag ? '멈췄습니다' : fail ? `${fail}줄 실패 — 빨간 줄의 '다시 만들기'를 누르세요` : '모두 만들었습니다. 합쳐서 듣기를 누르세요');
+  toast(stopFlag ? '멈췄습니다' : fail ? `${fail}조각 실패 — 빨간 조각의 '다시 만들기'를 누르세요` : '모두 만들었습니다. 합쳐서 듣기를 누르세요');
+  return !stopFlag;
 }
 $('#makeAll').onclick = () => makeMany(st.lines.filter(l => !l.takes.length));
 $('#makeAgain').onclick = () => makeMany(st.lines.slice());
 $('#stopBtn').onclick = () => { stopFlag = true; };
+const oddLines = (ref = refF0()) => st.lines.filter(l => { const d = l.pick ? devOf(l.pick, ref) : null; return d != null && Math.abs(d) > ODD; });
 function updateProgress(){
   const n = st.lines.length, done = st.lines.filter(l => l.pick).length;
   $('#barFill').style.width = n ? (done / n * 100) + '%' : '0';
-  $('#progress').textContent = n ? `${done} / ${n}줄 준비됨` : '';
+  $('#progress').textContent = n ? `${done} / ${n}조각 준비됨` : '';
+  const ref = refF0(), odd = oddLines(ref).length, el = $('#consInfo');
+  if (!ref){ el.className = 'clip'; el.textContent = '조각을 만들면 목소리 높이를 재서 보여 줍니다.'; }
+  else { el.className = 'clip ' + (odd ? 'bad' : 'ok'); el.textContent = `평균 목소리 높이 ${Math.round(ref)}Hz · ` + (odd ? `튀는 조각 ${odd}개` : '튀는 조각 없음 ✓'); }
+  $('#redoOdd').disabled = !odd;
+}
+// 조각마다 여러 번 만든 것 중 평균 높이에 가장 가까운 것을 고른다 (기준은 모든 조각의 중앙값)
+function pickClosest(quiet){
+  const all = st.lines.flatMap(l => l.takes).map(t => st.info[t] && st.info[t].f0).filter(Boolean), ref = median(all);
+  if (!ref){ if (!quiet) toast('아직 잴 소리가 없습니다'); return; }
+  let changed = 0;
+  st.lines.forEach(l => {
+    const best = l.takes.filter(t => devOf(t, ref) != null).sort((a, b) => Math.abs(devOf(a, ref)) - Math.abs(devOf(b, ref)))[0];
+    if (best && best !== l.pick){ l.pick = best; changed++; }
+  });
+  save(); refreshAll(); settingChanged();
+  if (!quiet) toast(changed ? `${changed}조각을 더 비슷한 번호로 바꿨습니다` : '이미 가장 비슷한 번호들입니다');
+}
+$('#pickClosest').onclick = () => pickClosest(false);
+$('#redoOdd').onclick = async () => {
+  const list = oddLines(); if (!list.length) return toast('튀는 조각이 없습니다');
+  if (await makeMany(list)) pickClosest(true);
+};
+// 예전에 만들어 둔 소리는 처음 열 때 한 번 잰다
+async function measureOld(){
+  let n = 0;
+  for (const t of st.lines.flatMap(l => l.takes)){
+    if (st.info[t]) continue;
+    const p = await getTake(t); if (!p) continue;
+    st.info[t] = analyze(p); n++;
+    await new Promise(r => setTimeout(r));
+  }
+  if (n){ save(); refreshAll(); }
 }
 
 /* ---------- ④ 합치기 ---------- */
 let lastJoin = null;
-$('#joinBtn').onclick = () => busy($('#joinBtn'), '합치는 중…', async () => {
-  const gap = parseFloat($('#gap').value) || 0.5, parts = []; let missing = 0;
-  for (let k = 0; k < st.lines.length; k++){
-    const l = st.lines[k], p = l.pick && await getTake(l.pick);
+let joining = false;
+$('#joinBtn').onclick = () => { if (!joining) busy($('#joinBtn'), '합치는 중…', async () => { joining = true; try{ await join(); } finally { joining = false; } }); };
+async function join(){
+  const gap = parseFloat(st.gap) || 0, pgap = parseFloat(st.pgap) || 0, speed = parseFloat(st.speed) || 1;
+  const ref = refF0();
+  const dbs = st.lines.map(l => l.pick && st.info[l.pick] && st.info[l.pick].db).filter(d => d > -60), refDb = median(dbs);
+  const parts = []; let missing = 0, tuned = 0;
+  for (const l of st.lines){
+    const p = l.pick && await getTake(l.pick);
     if (!p){ missing++; continue; }
-    if (parts.length) parts.push(new Int16Array(Math.round((l.para ? gap * 2.4 : gap) * SR)));
-    parts.push(p);
+    const inf = st.info[l.pick] || {};
+    let pitch = 1;
+    if (st.evenPitch && ref && inf.f0){ pitch = Math.min(1.08, Math.max(0.92, ref / inf.f0)); if (Math.abs(pitch - 1) > 0.01) tuned++; else pitch = 1; }
+    const y = reshape(p, pitch, speed * (l.speed || 1));
+    if (st.evenLoud && refDb && inf.db > -60){ const g = Math.min(2.8, Math.max(0.35, Math.pow(10, (refDb - inf.db) / 20))); for (let i = 0; i < y.length; i++) y[i] *= g; }
+    if (parts.length) parts.push(new Float32Array(Math.round((l.para ? pgap : gap) * SR)));
+    parts.push(y);
+    await new Promise(r => setTimeout(r));   // 화면이 멈추지 않게
   }
-  if (!parts.length) throw new Error('만든 줄이 없습니다');
-  parts.unshift(new Int16Array(Math.round(0.3 * SR))); parts.push(new Int16Array(Math.round(0.6 * SR)));
-  const total = parts.reduce((a, p) => a + p.length, 0), all = new Int16Array(total);
-  let o = 0; parts.forEach(p => { all.set(p, o); o += p.length; });
+  if (!parts.length) throw new Error('만든 조각이 없습니다');
+  parts.unshift(new Float32Array(Math.round(0.3 * SR))); parts.push(new Float32Array(Math.round(0.6 * SR)));
+  const total = parts.reduce((a, p) => a + p.length, 0), f = new Float32Array(total);
+  let o = 0, peak = 0; parts.forEach(p => { f.set(p, o); o += p.length; });
+  for (let i = 0; i < total; i++){ const v = Math.abs(f[i]); if (v > peak) peak = v; }
+  const g = peak > 0.97 ? 0.97 / peak : 1, all = new Int16Array(total);   // 크기 맞추다 넘치면 전체를 조금 줄인다
+  for (let i = 0; i < total; i++){ const v = f[i] * g; all[i] = v < 0 ? Math.max(-32768, v * 32768) : Math.min(32767, v * 32767); }
   lastJoin = wavBlob(all);
   const a = $('#allAudio'); if (a.src) URL.revokeObjectURL(a.src);
   a.src = URL.createObjectURL(lastJoin); a.hidden = false;
   $('#dlBtn').disabled = false;
   $('#joinInfo').className = 'clip ' + (missing ? 'bad' : 'ok');
-  $('#joinInfo').textContent = `전체 ${fmtSec(secs(all))}` + (missing ? ` — 아직 안 만든 ${missing}줄은 빠졌습니다` : '');
-});
+  $('#joinInfo').textContent = `전체 ${fmtSec(secs(all))} · 빠르기 ${speed.toFixed(2)}배` + (tuned ? ` · 높이 맞춘 조각 ${tuned}개` : '') + (missing ? ` — 아직 안 만든 ${missing}조각은 빠졌습니다` : '');
+}
 $('#dlBtn').onclick = () => {
   if (!lastJoin) return;
   const a = document.createElement('a'); a.href = URL.createObjectURL(lastJoin); a.download = 'voice.wav';
@@ -740,11 +956,14 @@ $('#cfgKeySave').onclick = () => {
 $('#script').value = st.script || '';
 $('#baseStyle').value = st.baseStyle;
 $('#pace').value = st.pace;
-$('#bySentence').checked = st.bySentence;
-$('#gap').value = st.gap;
+$('#unit').value = st.unit;
+$('#evenPitch').checked = st.evenPitch;
+$('#evenLoud').checked = st.evenLoud;
+showSliders();
 renderVoice();
 renderLines();
 showCost();
+measureOld();
 $('#keyWarn').hidden = !!apiKey();
 </script>
 </body>
