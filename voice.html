@@ -1,0 +1,710 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#F7F4EC">
+<title>목소리 만들기</title>
+<link rel="icon" href="icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Gowun+Batang:wght@400;700&family=IBM+Plex+Sans+KR:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+/* 목소리 — 원고를 Gemini 음성(TTS)으로 읽혀 쇼츠 내레이션 wav 를 만든다.
+   ① 목소리 고르기(기본·설명으로 만들기·내 목소리 복제) → ② 원고·줄마다 말투 → ③ 만들기·다시 만들기 → ④ 합쳐 받기.
+   누에마 메모와 같은 종이·먹 톤. 메모 앱의 탭 안(iframe)에서도, 따로 열어도 동작한다. */
+:root{
+  --paper:#F7F4EC; --paper-2:#FCFAF5; --paper-3:#EFEBE1; --line:#DAD5C8; --line-2:#C9C3B4;
+  --ink:#2A2924; --ink-2:#6E6A61; --ink-3:#A39E92;
+  --shu:#C3502F; --ai:#5E6688; --moss:#7B8A6C;
+  --serif:"Gowun Batang","Nanum Myeongjo","Apple Myungjo",serif;
+  --sans:"IBM Plex Sans KR","Apple SD Gothic Neo","Malgun Gothic",sans-serif;
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--sans);font-size:16px;line-height:1.7;-webkit-font-smoothing:antialiased}
+body{padding-bottom:calc(48px + env(safe-area-inset-bottom))}
+button{font:inherit;color:inherit;cursor:pointer;-webkit-tap-highlight-color:transparent}
+button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-visible{outline:1px solid var(--ink);outline-offset:3px}
+.wrap{max-width:640px;margin:0 auto;padding:0 16px}
+header{display:flex;align-items:baseline;justify-content:space-between;padding:26px 0 6px}
+header h1{font-family:var(--serif);font-weight:400;font-size:1.05rem;margin:0;letter-spacing:.14em}
+.link{background:none;border:none;padding:4px 0;font-size:.82rem;color:var(--ink-2);letter-spacing:.04em;text-decoration:none}
+.lead{font-size:.86rem;color:var(--ink-2);margin:4px 0 0}
+.embed header{padding-top:6px}
+.embed header h1,.embed .to-memo{display:none}
+
+section.step{border-top:1px solid var(--line);margin-top:26px;padding-top:18px}
+.step h2{font-family:var(--serif);font-weight:400;font-size:1rem;margin:0 0 10px;letter-spacing:.06em;display:flex;align-items:baseline;gap:10px}
+.step h2 .n{font-family:var(--sans);font-size:.72rem;color:var(--shu);letter-spacing:.1em}
+label.f{display:block;font-size:.8rem;color:var(--ink-2);margin:12px 0 4px}
+input[type=text],input[type=password],textarea,select{width:100%;font:inherit;font-size:.95rem;color:var(--ink);background:var(--paper-2);border:1px solid var(--line);border-radius:6px;padding:10px 12px}
+textarea{resize:vertical;line-height:1.65}
+textarea.essay{min-height:200px;font-family:var(--serif)}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.row > select,.row > input[type=text]{flex:1;min-width:0}
+.btn{background:var(--paper-2);border:1px solid var(--line-2);border-radius:999px;padding:8px 14px;font-size:.86rem;white-space:nowrap;min-height:38px}
+.btn:hover{border-color:var(--ink-3)}
+.btn.main{background:var(--ink);color:var(--paper);border-color:var(--ink)}
+.btn.ai{border-color:var(--ai);color:var(--ai)}
+.btn.rec{border-color:var(--shu);color:var(--shu)}
+.btn.rec.on{background:var(--shu);color:#fff}
+.btn.warn{color:var(--shu);border-color:transparent;background:none}
+.btn[disabled]{opacity:.45;cursor:default}
+.hint{font-size:.78rem;color:var(--ink-3);margin:6px 0 0}
+.how{font-size:.8rem;color:var(--ink-2);background:var(--paper-3);border-radius:6px;padding:10px 12px;margin:12px 0 0}
+.how ol{margin:4px 0 0;padding-left:18px}
+.check{font-size:.8rem;margin-top:10px;padding:8px 12px;border-radius:6px;background:var(--paper-3);color:var(--ink-2)}
+.check.bad{color:var(--shu)}
+.seg{display:flex;border:1px solid var(--line-2);border-radius:999px;overflow:hidden;margin-bottom:10px}
+.seg button{flex:1;background:none;border:none;padding:8px 4px;font-size:.84rem;color:var(--ink-2)}
+.seg button[aria-pressed="true"]{background:var(--ink);color:var(--paper)}
+.panel{background:var(--paper-2);border:1px solid var(--line);border-radius:10px;padding:12px 14px;margin-top:10px}
+.panel h3{font-family:var(--serif);font-weight:400;font-size:.95rem;margin:0 0 4px}
+.consent{font-family:var(--serif);font-size:1.02rem;background:var(--paper-3);border-left:3px solid var(--shu);padding:10px 12px;border-radius:4px;margin:6px 0}
+.clip{font-size:.8rem;color:var(--ink-2);margin-top:6px}
+.clip.ok{color:var(--moss)}
+.clip.bad{color:var(--shu)}
+.cur{font-size:.86rem;margin-top:10px;padding:8px 12px;border-radius:6px;background:var(--paper-3)}
+.cur b{font-weight:600}
+.mine{list-style:none;margin:8px 0 0;padding:0}
+.mine li{display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px dashed var(--line);font-size:.86rem}
+.mine li .nm{flex:1;min-width:0}
+.mine li small{color:var(--ink-3)}
+.mine li button{background:none;border:none;color:var(--ink-2);font-size:.78rem;padding:4px 6px}
+
+/* 줄 카드 */
+.line{background:var(--paper-2);border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin-top:10px}
+.line.para{margin-top:22px}
+.line .top{display:flex;align-items:center;gap:8px}
+.line .no{font-size:.72rem;color:var(--ink-3);min-width:22px}
+.line .st{font-size:.72rem;margin-left:auto;color:var(--ink-3)}
+.line .st.ok{color:var(--moss)}
+.line .st.err{color:var(--shu)}
+.line textarea.tx{font-family:var(--serif);font-size:1rem;margin-top:6px;min-height:52px;padding:8px 10px}
+.line .opts{display:flex;gap:6px;margin-top:6px;flex-wrap:wrap}
+.line .opts select{width:auto;flex:1;min-width:120px;padding:6px 8px;font-size:.84rem}
+.line .opts input{flex:2;min-width:140px;padding:6px 8px;font-size:.84rem}
+.takes{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px;align-items:center}
+.take{display:flex;align-items:center;gap:4px;border:1px solid var(--line-2);border-radius:999px;padding:3px 10px 3px 4px;font-size:.8rem;background:var(--paper)}
+.take.pick{border-color:var(--ink);background:var(--ink);color:var(--paper)}
+.take button{background:none;border:none;padding:2px 4px;font-size:.82rem;color:inherit}
+.play{width:28px;height:28px;border-radius:50%;border:1px solid currentColor !important;display:grid;place-items:center;font-size:.7rem !important}
+.err{font-size:.78rem;color:var(--shu);margin-top:4px;word-break:break-all}
+.busy{opacity:.55;pointer-events:none}
+.bar{height:6px;background:var(--paper-3);border-radius:3px;overflow:hidden;margin-top:10px}
+.bar i{display:block;height:100%;background:var(--moss);width:0;transition:width .3s}
+audio{width:100%;margin-top:10px}
+.sticky{position:sticky;bottom:0;background:linear-gradient(transparent,var(--paper) 30%);padding:18px 0 calc(8px + env(safe-area-inset-bottom));margin-top:8px}
+
+dialog{border:1px solid var(--line-2);border-radius:10px;background:var(--paper);color:var(--ink);width:min(520px,calc(100vw - 32px));padding:18px}
+dialog::backdrop{background:rgba(42,41,36,.35)}
+dialog h3{font-family:var(--serif);font-weight:400;margin:0 0 6px}
+.toast{position:fixed;left:50%;bottom:calc(24px + env(safe-area-inset-bottom));transform:translateX(-50%);background:var(--ink);color:var(--paper);padding:9px 16px;border-radius:999px;font-size:.84rem;max-width:calc(100vw - 32px);opacity:0;pointer-events:none;transition:opacity .2s;z-index:10}
+.toast.on{opacity:1}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>목소리 만들기</h1>
+    <a class="link to-memo" href="./">← 누에마 메모</a>
+  </header>
+  <p class="lead">원고를 Gemini 목소리로 읽혀 쇼츠 내레이션 파일(voice.wav)을 만듭니다.</p>
+  <div class="check bad" id="keyWarn" hidden>Gemini API 키가 없습니다. 메모 탭 ⚙ 설정에서 먼저 넣어 주세요.
+    <div class="row" style="margin-top:8px"><input type="password" id="cfgKey" placeholder="여기에 바로 넣어도 됩니다 (AIza…)" autocomplete="off"><button class="btn" id="cfgKeySave">저장</button></div>
+  </div>
+
+  <!-- ① 목소리 -->
+  <section class="step">
+    <h2><span class="n">01</span>목소리 고르기</h2>
+    <div class="seg" role="group" aria-label="목소리 종류">
+      <button data-vt="base" aria-pressed="true">기본 목소리</button>
+      <button data-vt="mine" aria-pressed="false">내 목소리들</button>
+      <button data-vt="new" aria-pressed="false">새로 만들기</button>
+    </div>
+
+    <div id="vtBase">
+      <div class="row"><select id="baseSel" aria-label="기본 목소리"></select></div>
+      <p class="hint">30개 목소리 모두 한국어를 읽습니다. 들어 보고 마음에 드는 걸 고르세요.</p>
+    </div>
+
+    <div id="vtMine" hidden>
+      <ul class="mine" id="mineList"></ul>
+      <p class="hint" id="mineEmpty">아직 만든 목소리가 없습니다. '새로 만들기'에서 만들어 보세요.</p>
+    </div>
+
+    <div id="vtNew" hidden>
+      <div class="panel">
+        <h3>설명으로 만들기</h3>
+        <p class="hint" style="margin-top:0">어떤 목소리인지 글로 적으면 새 목소리를 만들어 줍니다.</p>
+        <label class="f" for="pName">이름</label>
+        <input type="text" id="pName" placeholder="예: 마음 배달부 내레이터">
+        <label class="f" for="pDesc">목소리 설명</label>
+        <textarea id="pDesc" rows="3">40대 한국 남성. 낮고 따뜻한 목소리, 서두르지 않는 차분한 말투. 조용한 밤에 편지를 읽어 주듯 담담하지만 마음이 담긴 내레이션.</textarea>
+        <div class="row" style="margin-top:8px">
+          <select id="pGender" style="flex:none;width:auto"><option value="male">남성</option><option value="female">여성</option></select>
+          <button class="btn ai" id="pMake">목소리 만들기</button>
+        </div>
+      </div>
+      <div class="panel">
+        <h3>내 목소리 복제</h3>
+        <p class="hint" style="margin-top:0">본인 목소리만 됩니다. 같은 장소, 같은 마이크로 두 가지를 녹음하세요.</p>
+        <label class="f">① 내 목소리 (10~30초, 평소처럼 원고 읽기)</label>
+        <div class="row">
+          <button class="btn rec" id="srcRec">● 녹음</button>
+          <label class="btn">파일 고르기<input type="file" id="srcFile" accept="audio/*" hidden></label>
+        </div>
+        <div class="clip" id="srcInfo"></div>
+        <label class="f">② 동의 녹음 (아래 문장을 그대로 읽기)</label>
+        <div class="consent">나는 이 음성의 소유자이며 구글이 이 음성을 사용하여 음성 합성 모델을 생성할 것을 허용합니다.</div>
+        <div class="row">
+          <button class="btn rec" id="conRec">● 녹음</button>
+          <label class="btn">파일 고르기<input type="file" id="conFile" accept="audio/*" hidden></label>
+        </div>
+        <div class="clip" id="conInfo"></div>
+        <label class="f" for="rName">이름</label>
+        <div class="row"><input type="text" id="rName" placeholder="예: 내 목소리"><button class="btn ai" id="rMake">복제하기</button></div>
+      </div>
+    </div>
+
+    <div class="cur" id="curVoice"></div>
+    <label class="f" for="model">음질</label>
+    <select id="model">
+      <option value="gemini-3.8-flash-tts">Flash — 좋은 음질 (1분 약 20원)</option>
+      <option value="gemini-3.8-flash-lite-tts">Flash-Lite — 빠르고 싼 편 (1분 약 13원)</option>
+    </select>
+    <p class="hint" id="modelHint"></p>
+    <div class="row" style="margin-top:10px">
+      <input type="text" id="tryText" value="오늘도 마음 한 조각을 배달하러 왔습니다.">
+      <button class="btn" id="tryBtn">▶ 들어 보기</button>
+    </div>
+    <audio id="tryAudio" controls hidden></audio>
+  </section>
+
+  <!-- ② 원고 -->
+  <section class="step">
+    <h2><span class="n">02</span>원고</h2>
+    <div class="row" style="margin-bottom:8px">
+      <button class="btn" id="fromKnot">매듭짓기 글 가져오기</button>
+    </div>
+    <textarea class="essay" id="script" placeholder="원고를 붙여 넣으세요. 빈 줄은 문단 쉼(조금 길게)으로 들어갑니다."></textarea>
+    <label class="f" for="baseStyle">전체 말투 (모든 줄에 적용)</label>
+    <input type="text" id="baseStyle">
+    <div class="row" style="margin-top:8px">
+      <label class="f" style="margin:0">빠르기</label>
+      <select id="pace" style="flex:1">
+        <option value="">보통</option>
+        <option value="at a slightly slow, unhurried pace">조금 느리게</option>
+        <option value="slowly, with long natural pauses">느리게</option>
+        <option value="at a slightly brisk pace">조금 빠르게</option>
+      </select>
+    </div>
+    <div class="row" style="margin-top:10px">
+      <label style="font-size:.84rem;display:flex;gap:6px;align-items:center"><input type="checkbox" id="bySentence" checked> 문장마다 나누기</label>
+      <button class="btn main" id="splitBtn" style="margin-left:auto">줄 나누기</button>
+    </div>
+    <details class="how">
+      <summary>말투 넣는 요령</summary>
+      <ol>
+        <li>줄마다 아래 칸에서 '따뜻하게', '속삭이듯' 같은 말투를 고릅니다. 직접 적어도 됩니다.</li>
+        <li>문장 안에 <b>&lt;short pause&gt;</b>, <b>&lt;long pause&gt;</b> 를 넣으면 그 자리에서 쉽니다. <b>&lt;sigh&gt;</b>(한숨), <b>&lt;breath&gt;</b>(숨) 도 됩니다.</li>
+        <li>힘줄 낱말은 따옴표보다 말투 칸에 "'바다'를 힘주어" 처럼 적는 게 잘 됩니다.</li>
+      </ol>
+    </details>
+    <div id="lines"></div>
+  </section>
+
+  <!-- ③ 만들기 · ④ 합치기 -->
+  <section class="step" id="makeStep" hidden>
+    <h2><span class="n">03</span>만들기 · 합치기</h2>
+    <p class="hint" style="margin-top:0">줄마다 여러 번 만들 수 있고, 마음에 드는 번호를 누르면 그걸로 합칩니다.</p>
+    <div class="row">
+      <button class="btn main" id="makeAll">아직 없는 줄 모두 만들기</button>
+      <button class="btn" id="makeAgain">모든 줄 한 번씩 더</button>
+      <button class="btn warn" id="stopBtn" hidden>멈추기</button>
+    </div>
+    <div class="bar"><i id="barFill"></i></div>
+    <div class="clip" id="progress"></div>
+    <label class="f" for="gap">문장 사이 쉼</label>
+    <select id="gap">
+      <option value="0.3">짧게 (0.3초)</option>
+      <option value="0.5" selected>보통 (0.5초)</option>
+      <option value="0.8">길게 (0.8초)</option>
+    </select>
+    <div class="sticky">
+      <div class="row">
+        <button class="btn main" id="joinBtn">합쳐서 듣기</button>
+        <button class="btn" id="dlBtn" disabled>voice.wav 받기</button>
+      </div>
+      <audio id="allAudio" controls hidden></audio>
+      <div class="clip" id="joinInfo"></div>
+    </div>
+  </section>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const $ = s => document.querySelector(s);
+const arr = x => Array.isArray(x) ? x : [];
+const str = x => typeof x === 'string' ? x.trim() : '';
+const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+let toastT;
+function toast(msg){ const t = $('#toast'); t.textContent = msg; t.classList.add('on'); clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove('on'), 3400); }
+const store = {
+  get(k, d){ try{ const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; }catch(e){ return d; } },
+  set(k, v){ try{ localStorage.setItem(k, JSON.stringify(v)); }catch(e){ toast('저장 공간이 부족합니다'); } }
+};
+if (window.self !== window.top) document.documentElement.classList.add('embed');
+
+/* 만든 소리는 커서 IndexedDB 에 둔다 (take:<id> → 24kHz 모노 16비트 PCM 의 ArrayBuffer) */
+const idb = (() => {
+  let dbp;
+  const open = () => dbp || (dbp = new Promise((res, rej) => {
+    const r = indexedDB.open('nuema_voice', 1);
+    r.onupgradeneeded = () => r.result.createObjectStore('pcm');
+    r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error);
+  }));
+  const tx = async (mode, fn) => { const db = await open(); return new Promise((res, rej) => { const t = db.transaction('pcm', mode); const q = fn(t.objectStore('pcm')); t.oncomplete = () => res(q && q.result); t.onerror = () => rej(t.error); }); };
+  return { get: k => tx('readonly', s => s.get(k)).catch(() => null), set: (k, v) => tx('readwrite', s => s.put(v, k)), del: k => tx('readwrite', s => s.delete(k)).catch(() => {}) };
+})();
+
+/* ---------- 상태 ---------- */
+const API = 'https://generativelanguage.googleapis.com/v1beta';
+const SR = 24000;
+const DEFAULT_BASE = 'calm, warm Korean essay narration, like quietly reading a letter to someone';
+// 기본 목소리 30개 (구글 문서의 이름 + 느낌)
+const BASE_VOICES = [
+  ['Charon','남 · 또렷한 설명조'],['Iapetus','남 · 맑음'],['Algieba','남 · 부드러움'],['Umbriel','남 · 편안함'],
+  ['Schedar','남 · 고른 톤'],['Achird','남 · 친근함'],['Sadaltager','남 · 지적임'],['Enceladus','남 · 숨결 섞인'],
+  ['Orus','남 · 단단함'],['Alnilam','남 · 단단함'],['Rasalgethi','남 · 설명조'],['Algenib','남 · 거친 음색'],
+  ['Zubenelgenubi','남 · 편한 말투'],['Puck','남 · 경쾌함'],['Fenrir','남 · 들뜬'],['Sadachbia','남 · 생기'],
+  ['Sulafat','여 · 따뜻함'],['Vindemiatrix','여 · 온화함'],['Achernar','여 · 부드러움'],['Despina','여 · 부드러움'],
+  ['Gacrux','여 · 성숙함'],['Kore','여 · 단단함'],['Erinome','여 · 맑음'],['Callirrhoe','여 · 편안함'],
+  ['Aoede','여 · 산뜻함'],['Leda','여 · 젊음'],['Zephyr','여 · 밝음'],['Autonoe','여 · 밝음'],
+  ['Laomedeia','여 · 경쾌함'],['Pulcherrima','여 · 적극적']
+];
+// 줄 말투 고르기 → 모델에 보내는 영어 지시
+const MOODS = [
+  ['', '말투 그대로'],
+  ['calm and gentle', '차분하게'],
+  ['warm and tender', '따뜻하게'],
+  ['quiet and matter-of-fact, with restrained emotion', '담담하게'],
+  ['softly, almost whispering', '속삭이듯'],
+  ['thoughtful and reflective, unhurried', '생각에 잠겨'],
+  ['sad, with a slight tremble in the voice', '슬프게'],
+  ['bright and hopeful', '밝게'],
+  ['firm and emphatic', '힘주어'],
+  ['with a gentle smile in the voice', '미소 띠며']
+];
+let st = Object.assign({
+  voice: {kind: 'base', id: 'Charon', name: 'Charon', model: ''},
+  mine: [],                 // [{id, name, kind:'prompted'|'replicated', model, at}]
+  model: 'gemini-3.8-flash-tts',
+  script: '', baseStyle: DEFAULT_BASE, pace: '', bySentence: true, gap: '0.5',
+  lines: []                 // [{id, text, mood, extra, para, takes:[takeId], pick}]
+}, store.get('nuema_voice_v1', {}));
+const save = () => store.set('nuema_voice_v1', st);
+// 키는 누에마 메모 설정(nuema_cfg_v1)과 같이 쓴다. 메모 탭에서 바꿨을 수 있으니 매번 새로 읽는다
+const memoCfg = () => store.get('nuema_cfg_v1', {});
+const apiKey = () => str(memoCfg().key);
+
+/* ---------- 소리 다루기 ---------- */
+function b64ToBytes(b64){ const s = atob(b64); const u = new Uint8Array(s.length); for (let i = 0; i < s.length; i++) u[i] = s.charCodeAt(i); return u; }
+function bytesToB64(u){ let s = ''; for (let i = 0; i < u.length; i += 0x8000) s += String.fromCharCode.apply(null, u.subarray(i, i + 0x8000)); return btoa(s); }
+// Gemini 가 준 소리(wav 또는 머리 없는 l16) → 24kHz 모노 Int16
+function toPcm(bytes){
+  const dv = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  const tag = (o) => String.fromCharCode(bytes[o], bytes[o+1], bytes[o+2], bytes[o+3]);
+  if (bytes.length > 44 && tag(0) === 'RIFF' && tag(8) === 'WAVE'){
+    let o = 12, ch = 1, sr = SR, bits = 16, data = null;
+    while (o + 8 <= bytes.length){
+      const id = tag(o), size = dv.getUint32(o + 4, true);
+      if (id === 'fmt '){ ch = dv.getUint16(o + 10, true); sr = dv.getUint32(o + 12, true); bits = dv.getUint16(o + 22, true); }
+      if (id === 'data'){ data = bytes.subarray(o + 8, Math.min(bytes.length, o + 8 + size)); break; }
+      o += 8 + size + (size & 1);
+    }
+    if (!data || bits !== 16) throw new Error('알 수 없는 소리 형식');
+    const n = Math.floor(data.length / 2 / ch), out = new Int16Array(n), d2 = new DataView(data.buffer, data.byteOffset, data.byteLength);
+    for (let i = 0; i < n; i++) out[i] = d2.getInt16(i * 2 * ch, true);
+    return sr === SR ? out : resampleInt16(out, sr, SR);
+  }
+  const n = Math.floor(bytes.length / 2), out = new Int16Array(n);
+  for (let i = 0; i < n; i++) out[i] = dv.getInt16(i * 2, true);
+  return out;
+}
+function resampleInt16(src, from, to){
+  const n = Math.round(src.length * to / from), out = new Int16Array(n);
+  for (let i = 0; i < n; i++){ const x = i * from / to, j = Math.floor(x), f = x - j; out[i] = Math.round((src[j] || 0) * (1 - f) + (src[j + 1] || src[j] || 0) * f); }
+  return out;
+}
+function wavBytes(pcm, sr = SR){
+  const buf = new ArrayBuffer(44 + pcm.length * 2), dv = new DataView(buf);
+  const w = (o, s) => { for (let i = 0; i < s.length; i++) dv.setUint8(o + i, s.charCodeAt(i)); };
+  w(0, 'RIFF'); dv.setUint32(4, 36 + pcm.length * 2, true); w(8, 'WAVE'); w(12, 'fmt ');
+  dv.setUint32(16, 16, true); dv.setUint16(20, 1, true); dv.setUint16(22, 1, true); dv.setUint32(24, sr, true);
+  dv.setUint32(28, sr * 2, true); dv.setUint16(32, 2, true); dv.setUint16(34, 16, true); w(36, 'data'); dv.setUint32(40, pcm.length * 2, true);
+  new Int16Array(buf, 44).set(pcm);
+  return new Uint8Array(buf);
+}
+const wavBlob = pcm => new Blob([wavBytes(pcm)], {type: 'audio/wav'});
+// 녹음·파일(어떤 형식이든) → 24kHz 모노 Int16. 복제용 소리는 이 형식을 권장한다
+async function fileToPcm(blob){
+  const ab = await blob.arrayBuffer();
+  const Ctx = window.AudioContext || window.webkitAudioContext;
+  const ctx = new Ctx(); let decoded;
+  try{ decoded = await ctx.decodeAudioData(ab.slice(0)); } finally { try{ ctx.close(); }catch(e){} }
+  const off = new OfflineAudioContext(1, Math.ceil(decoded.duration * SR), SR);
+  const s = off.createBufferSource(); s.buffer = decoded; s.connect(off.destination); s.start();
+  const r = await off.startRendering(), f = r.getChannelData(0), out = new Int16Array(f.length);
+  for (let i = 0; i < f.length; i++){ const v = Math.max(-1, Math.min(1, f[i])); out[i] = v < 0 ? v * 0x8000 : v * 0x7fff; }
+  return out;
+}
+let player = new Audio(), playingUrl = '';
+function playPcm(pcm){
+  player.pause(); if (playingUrl) URL.revokeObjectURL(playingUrl);
+  playingUrl = URL.createObjectURL(wavBlob(pcm)); player.src = playingUrl; player.play().catch(() => {});
+}
+const secs = pcm => pcm.length / SR;
+const fmtSec = s => s >= 60 ? `${Math.floor(s / 60)}분 ${Math.round(s % 60)}초` : `${s.toFixed(1)}초`;
+
+/* ---------- Gemini 호출 ---------- */
+async function api(path, body, method = 'POST'){
+  const key = apiKey();
+  if (!key){ $('#keyWarn').hidden = false; throw new Error('Gemini API 키가 없습니다'); }
+  let r;
+  try{
+    r = await fetch(API + path, {method, headers: {'Content-Type': 'application/json', 'x-goog-api-key': key}, body: body ? JSON.stringify(body) : undefined});
+  }catch(e){ throw new Error('인터넷 연결을 확인해 주세요'); }
+  const txt = await r.text(); let j = null;
+  try{ j = txt ? JSON.parse(txt) : {}; }catch(e){}
+  if (!r.ok){
+    const msg = (j && j.error && j.error.message) || txt.slice(0, 200) || r.status;
+    const e = new Error(r.status === 429 ? '잠시 너무 많이 요청했습니다 — 조금 뒤 다시' : `Gemini 오류 ${r.status}: ${msg}`);
+    e.status = r.status; throw e;
+  }
+  return j || {};
+}
+// 응답 어디에 있든 type:"audio" 의 data 를 찾는다 (steps[].content[] 또는 output_audio)
+function findAudio(j){
+  let found = null;
+  (function walk(o){
+    if (!o || typeof o !== 'object') return;
+    if (Array.isArray(o)){ o.forEach(walk); return; }
+    if (typeof o.data === 'string' && o.data.length > 100 && (o.type === 'audio' || /audio/.test(o.mime_type || o.mimeType || ''))) found = o.data;
+    Object.values(o).forEach(walk);
+  })(j);
+  return found;
+}
+function styleFor(line){
+  const parts = [str($('#baseStyle').value), line ? line.mood : '', line ? str(line.extra) : '', $('#pace').value].filter(Boolean);
+  return parts.join('; ');
+}
+function voiceModel(){ return st.voice.kind === 'base' ? st.model : (st.voice.model || st.model); }
+async function speak(text, style){
+  const content = {type: 'text', text};
+  if (style) content.annotations = [{type: 'speech_metadata', style}];
+  const j = await api('/interactions', {
+    model: voiceModel(),
+    input: [{type: 'user_input', content: [content]}],
+    response_format: {type: 'audio'},
+    generation_config: {speech_config: [{voice: st.voice.id}]}
+  });
+  const b64 = findAudio(j);
+  if (!b64) throw new Error('소리가 오지 않았습니다 (글이 너무 짧거나 막혔을 수 있음)');
+  return toPcm(b64ToBytes(b64));
+}
+
+/* ---------- ① 목소리 ---------- */
+function renderVoice(){
+  $('#baseSel').innerHTML = BASE_VOICES.map(([n, d]) => `<option value="${n}">${n} — ${d}</option>`).join('');
+  if (st.voice.kind === 'base') $('#baseSel').value = st.voice.id;
+  $('#mineList').innerHTML = st.mine.map(v => `<li data-id="${esc(v.id)}">
+      <span class="nm">${esc(v.name)} <small>${v.kind === 'replicated' ? '복제' : '설명'} · ${v.model.includes('lite') ? 'Lite' : 'Flash'}</small></span>
+      <button data-act="use">${st.voice.id === v.id ? '✓ 쓰는 중' : '쓰기'}</button>
+      <button data-act="del">지우기</button></li>`).join('');
+  $('#mineEmpty').hidden = st.mine.length > 0;
+  const v = st.voice;
+  $('#curVoice').innerHTML = `지금 목소리: <b>${esc(v.name)}</b> ${v.kind === 'base' ? '(기본)' : '(내 목소리)'}`;
+  $('#model').value = st.model;
+  $('#model').disabled = v.kind !== 'base';
+  $('#modelHint').textContent = v.kind !== 'base' ? '만든 목소리는 만들 때 고른 음질로만 읽습니다.' : '';
+}
+document.querySelectorAll('.seg button').forEach(b => b.onclick = () => {
+  document.querySelectorAll('.seg button').forEach(x => x.setAttribute('aria-pressed', String(x === b)));
+  $('#vtBase').hidden = b.dataset.vt !== 'base'; $('#vtMine').hidden = b.dataset.vt !== 'mine'; $('#vtNew').hidden = b.dataset.vt !== 'new';
+  if (b.dataset.vt === 'base') selectBase();
+});
+function selectBase(){ const n = $('#baseSel').value; st.voice = {kind: 'base', id: n, name: n, model: ''}; save(); renderVoice(); }
+$('#baseSel').onchange = selectBase;
+$('#model').onchange = () => { st.model = $('#model').value; save(); };
+$('#mineList').onclick = async e => {
+  const b = e.target.closest('button'); if (!b) return;
+  const id = b.closest('li').dataset.id, v = st.mine.find(x => x.id === id);
+  if (b.dataset.act === 'use'){ st.voice = {kind: v.kind, id: v.id, name: v.name, model: v.model}; save(); renderVoice(); toast(`'${v.name}' 목소리로 읽습니다`); }
+  if (b.dataset.act === 'del'){
+    if (!confirm(`'${v.name}' 목소리를 지울까요? 구글 쪽에서도 지워집니다.`)) return;
+    try{ await api('/voices/' + encodeURIComponent(id), null, 'DELETE'); }catch(err){ if (err.status !== 404){ toast(err.message); return; } }
+    st.mine = st.mine.filter(x => x.id !== id);
+    if (st.voice.id === id) st.voice = {kind: 'base', id: 'Charon', name: 'Charon', model: ''};
+    save(); renderVoice();
+  }
+};
+function addMine(j, name, kind, model){
+  const id = str(j.id) || str(j.name).split('/').pop();
+  if (!id) throw new Error('목소리 번호가 오지 않았습니다');
+  st.mine.unshift({id, name, kind, model, at: Date.now()});
+  st.voice = {kind, id, name, model};
+  save(); renderVoice();
+  document.querySelector('.seg [data-vt=mine]').click();
+}
+async function busy(btn, label, fn){
+  const old = btn.textContent; btn.disabled = true; btn.textContent = label;
+  try{ return await fn(); }catch(e){ toast(e.message); console.error(e); } finally { btn.disabled = false; btn.textContent = old; }
+}
+$('#pMake').onclick = () => busy($('#pMake'), '만드는 중…', async () => {
+  const name = str($('#pName').value) || '새 목소리', desc = str($('#pDesc').value);
+  if (!desc) throw new Error('목소리 설명을 적어 주세요');
+  const model = st.model;
+  const j = await api('/voices', {store: true, voice: {model, type: 'prompted', display_name: name, gender: $('#pGender').value, language_code: 'ko-KR', prompted: {input: desc}}});
+  addMine(j, name, 'prompted', model);
+  const sa = j.sample_audio && j.sample_audio.data;
+  if (sa) playPcm(toPcm(b64ToBytes(sa)));
+  toast(`'${name}' 목소리를 만들었습니다`);
+});
+
+// 복제: 내 목소리 + 동의 녹음
+const clips = {src: null, con: null};
+function showClip(which){
+  const pcm = clips[which], el = $(which === 'src' ? '#srcInfo' : '#conInfo');
+  if (!pcm){ el.textContent = ''; return; }
+  const s = secs(pcm);
+  let msg = `${fmtSec(s)} 준비됨`, cls = 'ok';
+  if (which === 'src' && s < 10){ msg = `${fmtSec(s)} — 10초 이상 필요합니다`; cls = 'bad'; }
+  el.className = 'clip ' + cls;
+  el.innerHTML = `${esc(msg)} <button class="btn" style="min-height:0;padding:2px 10px;margin-left:6px" data-play="${which}">▶</button>`;
+}
+document.addEventListener('click', e => { const b = e.target.closest('[data-play]'); if (b && clips[b.dataset.play]) playPcm(clips[b.dataset.play]); });
+async function takeClip(which, blob){
+  try{
+    let pcm = await fileToPcm(blob);
+    if (which === 'src' && secs(pcm) > 30){ pcm = pcm.slice(0, 30 * SR); toast('30초까지만 씁니다'); }
+    clips[which] = pcm; showClip(which);
+  }catch(e){ toast('소리 파일을 읽지 못했습니다'); }
+}
+$('#srcFile').onchange = e => e.target.files[0] && takeClip('src', e.target.files[0]);
+$('#conFile').onchange = e => e.target.files[0] && takeClip('con', e.target.files[0]);
+let rec = null;
+async function toggleRec(which, btn){
+  if (rec){ rec.stop(); return; }
+  let stream;
+  try{ stream = await navigator.mediaDevices.getUserMedia({audio: {echoCancellation: false, noiseSuppression: false, autoGainControl: true}}); }
+  catch(e){ toast('마이크를 쓸 수 없습니다'); return; }
+  const chunks = [], mr = new MediaRecorder(stream);
+  rec = mr; btn.classList.add('on'); btn.textContent = '■ 멈추기';
+  const t0 = Date.now(), tick = setInterval(() => { btn.textContent = `■ 멈추기 ${Math.floor((Date.now() - t0) / 1000)}초`; if (which === 'src' && Date.now() - t0 > 30000) mr.stop(); }, 500);
+  mr.ondataavailable = e => e.data.size && chunks.push(e.data);
+  mr.onstop = () => {
+    clearInterval(tick); stream.getTracks().forEach(t => t.stop());
+    rec = null; btn.classList.remove('on'); btn.textContent = '● 녹음';
+    takeClip(which, new Blob(chunks, {type: mr.mimeType}));
+  };
+  mr.start();
+}
+$('#srcRec').onclick = () => toggleRec('src', $('#srcRec'));
+$('#conRec').onclick = () => toggleRec('con', $('#conRec'));
+$('#rMake').onclick = () => busy($('#rMake'), '복제하는 중…', async () => {
+  if (!clips.src || secs(clips.src) < 10) throw new Error('① 내 목소리를 10초 이상 녹음해 주세요');
+  if (!clips.con) throw new Error('② 동의 녹음을 해 주세요');
+  const name = str($('#rName').value) || '내 목소리', model = st.model;
+  const wav = pcm => ({mime_type: 'audio/wav', data: bytesToB64(wavBytes(pcm))});
+  const j = await api('/voices', {store: true, voice: {model, type: 'replicated', display_name: name, replicated: {source_audio: wav(clips.src), consent_audio: wav(clips.con)}}});
+  addMine(j, name, 'replicated', model);
+  toast(`'${name}' 목소리를 복제했습니다. ▶ 들어 보기로 확인하세요`);
+});
+$('#tryBtn').onclick = () => busy($('#tryBtn'), '만드는 중…', async () => {
+  const text = str($('#tryText').value); if (!text) return;
+  const pcm = await speak(text, styleFor(null));
+  const a = $('#tryAudio'); if (a.src) URL.revokeObjectURL(a.src);
+  a.src = URL.createObjectURL(wavBlob(pcm)); a.hidden = false; a.play().catch(() => {});
+});
+
+/* ---------- ② 원고 → 줄 ---------- */
+function splitScript(text, bySentence){
+  const out = [];
+  text.replace(/\r/g, '').split(/\n\s*\n+/).forEach(par => {
+    let first = true;
+    par.split('\n').map(s => s.trim()).filter(Boolean).forEach(l => {
+      const pieces = bySentence ? (l.match(/[^.!?…。]+(?:[.!?…。]+["'”’」)]*|$)/g) || [l]).map(s => s.trim()).filter(Boolean) : [l];
+      pieces.forEach(p => { out.push({id: uid(), text: p, mood: '', extra: '', para: first && out.length > 0, takes: [], pick: null}); first = false; });
+    });
+  });
+  return out;
+}
+$('#splitBtn').onclick = async () => {
+  const text = $('#script').value;
+  if (!str(text)) return toast('원고를 먼저 붙여 넣으세요');
+  if (st.lines.some(l => l.takes.length) && !confirm('이미 만든 소리가 있습니다. 다시 나누면 지워집니다. 계속할까요?')) return;
+  for (const l of st.lines) for (const t of l.takes) idb.del('take:' + t);
+  st.lines = splitScript(text, $('#bySentence').checked);
+  save(); renderLines();
+  toast(`${st.lines.length}줄로 나눴습니다`);
+};
+$('#fromKnot').onclick = () => {
+  const k = store.get('nuema_knot_v1', {});
+  if (!str(k.text)) return toast('매듭짓기에 글이 없습니다');
+  $('#script').value = k.text; st.script = k.text; save(); toast('매듭짓기 글을 가져왔습니다. 줄 나누기를 누르세요');
+};
+['script', 'baseStyle'].forEach(id => $('#' + id).addEventListener('input', e => { st[id] = e.target.value; save(); }));
+$('#pace').onchange = e => { st.pace = e.target.value; save(); };
+$('#bySentence').onchange = e => { st.bySentence = e.target.checked; save(); };
+$('#gap').onchange = e => { st.gap = e.target.value; save(); };
+
+const lineState = {};   // id → '만드는 중' 등 화면용
+function lineHtml(l, i){
+  const s = lineState[l.id] || {};
+  const takes = l.takes.map((t, k) => `<span class="take ${l.pick === t ? 'pick' : ''}" data-take="${t}"><button class="play" data-act="play" aria-label="듣기">▶</button><button data-act="pick">${k + 1}번${l.pick === t ? ' ✓' : ''}</button></span>`).join('');
+  return `<div class="line ${l.para ? 'para' : ''}" data-id="${l.id}">
+    <div class="top"><span class="no">${i + 1}</span><span class="st ${s.cls || ''}">${esc(s.msg || (l.takes.length ? '' : '아직 없음'))}</span></div>
+    <textarea class="tx" rows="2" data-f="text">${esc(l.text)}</textarea>
+    <div class="opts">
+      <select data-f="mood" aria-label="말투">${MOODS.map(([v, n]) => `<option value="${esc(v)}" ${l.mood === v ? 'selected' : ''}>${n}</option>`).join('')}</select>
+      <input type="text" data-f="extra" value="${esc(l.extra)}" placeholder="직접 적기 (예: 끝을 흐리듯)">
+    </div>
+    <div class="takes">${takes}<button class="btn" data-act="make" style="min-height:30px;padding:3px 12px">${l.takes.length ? '↻ 다시 만들기' : '만들기'}</button>${l.takes.length > 1 ? '<button class="btn warn" data-act="trim" style="min-height:30px;padding:3px 8px">고른 것만 남기기</button>' : ''}</div>
+    ${s.err ? `<div class="err">${esc(s.err)}</div>` : ''}
+  </div>`;
+}
+function renderLines(){
+  $('#lines').innerHTML = st.lines.map(lineHtml).join('');
+  $('#makeStep').hidden = !st.lines.length;
+  updateProgress();
+}
+function renderLine(l){
+  const el = document.querySelector(`.line[data-id="${l.id}"]`); if (!el) return;
+  const focused = document.activeElement && el.contains(document.activeElement);
+  if (focused){   // 글을 고치는 중이면 글 칸은 그대로 두고 나머지만 바꾼다
+    const tmp = document.createElement('div'); tmp.innerHTML = lineHtml(l, st.lines.indexOf(l));
+    const n = tmp.firstElementChild;
+    el.querySelector('.top').replaceWith(n.querySelector('.top'));
+    el.querySelector('.takes').replaceWith(n.querySelector('.takes'));
+    const oe = el.querySelector('.err'), ne = n.querySelector('.err');
+    if (oe) oe.remove(); if (ne) el.appendChild(ne);
+  } else {
+    el.outerHTML = lineHtml(l, st.lines.indexOf(l));
+  }
+  updateProgress();
+}
+$('#lines').addEventListener('input', e => {
+  const f = e.target.dataset.f; if (!f) return;
+  const l = st.lines.find(x => x.id === e.target.closest('.line').dataset.id);
+  l[f] = e.target.value; save();
+});
+$('#lines').addEventListener('click', async e => {
+  const b = e.target.closest('button'); if (!b) return;
+  const l = st.lines.find(x => x.id === b.closest('.line').dataset.id);
+  const t = b.closest('[data-take]') && b.closest('[data-take]').dataset.take;
+  if (b.dataset.act === 'play'){ const p = await getTake(t); if (p) playPcm(p); else toast('소리를 찾지 못했습니다'); }
+  if (b.dataset.act === 'pick'){ l.pick = t; save(); renderLine(l); const p = await getTake(t); if (p) playPcm(p); }
+  if (b.dataset.act === 'make') makeLine(l, true);
+  if (b.dataset.act === 'trim'){ l.takes.filter(x => x !== l.pick).forEach(x => idb.del('take:' + x)); l.takes = [l.pick]; save(); renderLine(l); }
+});
+
+/* ---------- ③ 만들기 ---------- */
+const cache = new Map();
+async function getTake(id){
+  if (cache.has(id)) return cache.get(id);
+  const ab = await idb.get('take:' + id); if (!ab) return null;
+  const p = new Int16Array(ab); cache.set(id, p); return p;
+}
+async function makeLine(l, play){
+  if (!str(l.text)) return;
+  lineState[l.id] = {msg: '만드는 중…'}; renderLine(l);
+  for (let attempt = 0; attempt < 2; attempt++){
+    try{
+      const pcm = await speak(l.text, styleFor(l));
+      const id = uid();
+      await idb.set('take:' + id, pcm.buffer.slice(0));
+      cache.set(id, pcm);
+      l.takes.push(id); l.pick = id; save();
+      lineState[l.id] = {msg: fmtSec(secs(pcm)), cls: 'ok'}; renderLine(l);
+      if (play) playPcm(pcm);
+      return true;
+    }catch(e){
+      if (attempt === 0 && (e.status === 429 || e.status >= 500)){ lineState[l.id] = {msg: '잠시 기다렸다 다시…'}; renderLine(l); await new Promise(r => setTimeout(r, 4000)); continue; }
+      lineState[l.id] = {msg: '실패', cls: 'err', err: e.message}; renderLine(l);
+      return false;
+    }
+  }
+}
+let stopFlag = false, running = false;
+async function makeMany(list){
+  if (running) return;
+  if (!apiKey()){ $('#keyWarn').hidden = false; return toast('Gemini API 키가 없습니다'); }
+  running = true; stopFlag = false; $('#stopBtn').hidden = false;
+  $('#makeAll').disabled = $('#makeAgain').disabled = true;
+  let i = 0, fail = 0;
+  const worker = async () => { while (!stopFlag && i < list.length){ const l = list[i++]; if (!(await makeLine(l, false))) fail++; } };
+  await Promise.all([worker(), worker()]);   // 두 줄씩 동시에
+  running = false; $('#stopBtn').hidden = true;
+  $('#makeAll').disabled = $('#makeAgain').disabled = false;
+  toast(stopFlag ? '멈췄습니다' : fail ? `${fail}줄 실패 — 빨간 줄의 '다시 만들기'를 누르세요` : '모두 만들었습니다. 합쳐서 듣기를 누르세요');
+}
+$('#makeAll').onclick = () => makeMany(st.lines.filter(l => !l.takes.length));
+$('#makeAgain').onclick = () => makeMany(st.lines.slice());
+$('#stopBtn').onclick = () => { stopFlag = true; };
+function updateProgress(){
+  const n = st.lines.length, done = st.lines.filter(l => l.pick).length;
+  $('#barFill').style.width = n ? (done / n * 100) + '%' : '0';
+  $('#progress').textContent = n ? `${done} / ${n}줄 준비됨` : '';
+}
+
+/* ---------- ④ 합치기 ---------- */
+let lastJoin = null;
+$('#joinBtn').onclick = () => busy($('#joinBtn'), '합치는 중…', async () => {
+  const gap = parseFloat($('#gap').value) || 0.5, parts = []; let missing = 0;
+  for (let k = 0; k < st.lines.length; k++){
+    const l = st.lines[k], p = l.pick && await getTake(l.pick);
+    if (!p){ missing++; continue; }
+    if (parts.length) parts.push(new Int16Array(Math.round((l.para ? gap * 2.4 : gap) * SR)));
+    parts.push(p);
+  }
+  if (!parts.length) throw new Error('만든 줄이 없습니다');
+  parts.unshift(new Int16Array(Math.round(0.3 * SR))); parts.push(new Int16Array(Math.round(0.6 * SR)));
+  const total = parts.reduce((a, p) => a + p.length, 0), all = new Int16Array(total);
+  let o = 0; parts.forEach(p => { all.set(p, o); o += p.length; });
+  lastJoin = wavBlob(all);
+  const a = $('#allAudio'); if (a.src) URL.revokeObjectURL(a.src);
+  a.src = URL.createObjectURL(lastJoin); a.hidden = false;
+  $('#dlBtn').disabled = false;
+  $('#joinInfo').className = 'clip ' + (missing ? 'bad' : 'ok');
+  $('#joinInfo').textContent = `전체 ${fmtSec(secs(all))}` + (missing ? ` — 아직 안 만든 ${missing}줄은 빠졌습니다` : '');
+});
+$('#dlBtn').onclick = () => {
+  if (!lastJoin) return;
+  const a = document.createElement('a'); a.href = URL.createObjectURL(lastJoin); a.download = 'voice.wav';
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+  toast('voice.wav 를 받았습니다. 쇼츠 공장 public 폴더에 넣으세요');
+};
+
+/* ---------- 키 ---------- */
+$('#cfgKeySave').onclick = () => {
+  const k = str($('#cfgKey').value); if (!k) return;
+  const c = memoCfg(); c.key = k; store.set('nuema_cfg_v1', c);
+  $('#keyWarn').hidden = true; toast('키를 저장했습니다 (메모 앱과 같이 씁니다)');
+};
+
+/* ---------- 시작 ---------- */
+$('#script').value = st.script || '';
+$('#baseStyle').value = st.baseStyle;
+$('#pace').value = st.pace;
+$('#bySentence').checked = st.bySentence;
+$('#gap').value = st.gap;
+renderVoice();
+renderLines();
+$('#keyWarn').hidden = !!apiKey();
+</script>
+</body>
+</html>
