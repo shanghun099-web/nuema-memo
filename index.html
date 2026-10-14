@@ -219,6 +219,10 @@ body.adding .toast{bottom:calc(136px + env(safe-area-inset-bottom))}
 /* ===== 새 디자인 (2026-09 목업 반영): 크림 종이 + 주홍, 둥근 알약 버튼, 카드 목록 ===== */
 header{align-items:center;padding:30px 0 4px}
 header h1{font-weight:700;font-size:1.9rem;letter-spacing:.02em;display:flex;align-items:baseline;gap:8px}
+.cost-badge{margin-left:auto;margin-right:14px;background:none;border:1px solid var(--line-2);border-radius:999px;padding:3px 11px;font-size:.78rem;color:var(--ink-2);white-space:nowrap}
+.cost-badge b{color:var(--ink);font-weight:600}
+.cost-rows div{display:flex;justify-content:space-between;padding:7px 0;border-top:1px solid var(--line);font-size:.88rem}
+.cost-rows div:first-child{border-top:0}
 header h1 .script{font-family:"Dancing Script",cursive;font-weight:500;font-size:1.35rem;color:#A0664F;letter-spacing:0}
 .icon-btn.gear{padding:6px;color:var(--ink);display:flex}
 .icon-btn.gear svg{width:26px;height:26px}
@@ -332,6 +336,7 @@ body.picking .toast{bottom:calc(130px + env(safe-area-inset-bottom))}
 <div class="wrap">
   <header>
     <h1>누에마 메모<span class="script" aria-hidden="true">Memo</span></h1>
+    <button class="cost-badge" id="costBadge" aria-label="이번 달 사용 요금" hidden></button>
     <button class="icon-btn gear" id="btnSettings" aria-label="설정"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg></button>
   </header>
   <nav class="tabs" role="tablist">
@@ -386,6 +391,7 @@ body.picking .toast{bottom:calc(130px + env(safe-area-inset-bottom))}
 <div class="toast" id="toast"></div>
 <input type="file" id="importFile" accept="application/json" hidden>
 
+<script src="cost.js"></script>
 <script>
 /* ---------- 기본값 ---------- */
 const MAX_SEC = 300;
@@ -412,12 +418,12 @@ const store = {
 let memos = store.get('nuema_memos_v1', []);
 /* 기본 제공 모델. "불러오기"를 누르면 내 키로 실제 쓸 수 있는 목록으로 보강된다 */
 const MODELS = [
-  {id:'gemini-2.5-flash',        name:'Gemini 2.5 Flash',          note:'기본값. 빠르고 무료 한도가 넉넉함'},
-  {id:'gemini-2.5-pro',          name:'Gemini 2.5 Pro',            note:'더 꼼꼼하게 읽음. 느리고 무료 한도가 적음'},
-  {id:'gemini-2.5-flash-lite',   name:'Gemini 2.5 Flash-Lite',     note:'가장 가볍고 빠름. 짧은 메모에 적당'},
-  {id:'gemini-3-flash-preview',  name:'Gemini 3 Flash (프리뷰)',    note:'새 세대. 프리뷰라 이름이 바뀔 수 있음'},
-  {id:'gemini-3-pro-preview',    name:'Gemini 3 Pro (프리뷰)',      note:'새 세대 상위 모델'},
-  {id:'gemini-2.0-flash',        name:'Gemini 2.0 Flash',          note:'이전 세대. 예비용'}
+  {id:'gemini-2.5-flash',        name:'Gemini 2.5 Flash',          note:'기본값. 빠르고 쌈'},
+  {id:'gemini-3.8-flash',        name:'Gemini 3.8 Flash',          note:'최신 세대. 더 잘 알아듣고 정리함. 2.5 Flash 보다 약 2배 비쌈'},
+  {id:'gemini-3.5-flash-lite',   name:'Gemini 3.5 Flash-Lite',     note:'최신 세대 가벼운 모델. 2.5 Flash 와 비슷한 값'},
+  {id:'gemini-3.1-pro-preview',  name:'Gemini 3.1 Pro (프리뷰)',    note:'가장 꼼꼼함. 느리고 훨씬 비쌈 (2.5 Flash 의 약 5배)'},
+  {id:'gemini-2.5-flash-lite',   name:'Gemini 2.5 Flash-Lite',     note:'가장 가볍고 쌈. 짧은 메모에 적당'},
+  {id:'gemini-2.5-pro',          name:'Gemini 2.5 Pro',            note:'이전 세대 상위 모델'}
 ];
 // 고른 모델이 없거나(404) 한도 초과(429)·과부하(503)면 이 순서로 넘어간다
 const FALLBACK = ['gemini-2.5-flash', 'gemini-2.5-flash-lite', 'gemini-2.0-flash'];
@@ -749,15 +755,18 @@ function parseJSON(t){
 }
 /* Gemini 에 parts 를 보내 JSON 응답을 받는다. 고른 모델 → (켜져 있으면) 예비 모델 순으로 시도. 키 오류(400/403) 같은 건 바로 멈춘다 */
 async function geminiJSON(parts){
-  const body = JSON.stringify({contents:[{role:'user', parts}], generationConfig:{responseMimeType:'application/json', temperature:0.6}});
   const chain = [cfg.model, ...(cfg.fallback === false ? [] : FALLBACK.filter(x => x !== cfg.model).slice(0, 2))];
   let d = null, used = null, lastErr = null;
   for (const model of chain){
+    // 제미나이 3 이후는 온도를 지정하지 않는다 (낮추면 같은 말을 되풀이하는 일이 있음)
+    const gen = {responseMimeType:'application/json'};
+    if (/^gemini-[12]\./.test(model)) gen.temperature = 0.6;
+    const body = JSON.stringify({contents:[{role:'user', parts}], generationConfig:gen});
     // 키는 URL이 아니라 헤더로 보낸다 (히스토리·프록시 로그에 남지 않게)
     const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`, {
       method:'POST', headers:{'Content-Type':'application/json', 'x-goog-api-key': cfg.key}, body
     });
-    if (res.ok){ d = await res.json(); used = model; break; }
+    if (res.ok){ d = await res.json(); used = model; if (window.NuemaCost) NuemaCost.addUsage('memo', model, d.usageMetadata); break; }
     const t = await res.text();
     let msg = t; try{ msg = JSON.parse(t).error.message; }catch(e){}
     lastErr = new Error(`Gemini 오류 ${res.status} (${model}): ${String(msg).slice(0, 140)}`);
@@ -1688,6 +1697,8 @@ function openSettings(){
     <label class="field">AI에게 줄 추가 지시
       <textarea id="cfgGuide">${esc(cfg.guide)}</textarea></label>
     <button class="link-btn" data-act="resetguide">기본 지시로 되돌리기</button>
+    <h3>이번 달 사용 요금</h3>
+    ${costHtml()}
     <h3>구글 독스</h3>
     <label class="field">Apps Script 웹앱 URL
       <input id="cfgGdoc" autocomplete="off" value="${esc(cfg.gdocUrl || '')}" placeholder="https://script.google.com/macros/s/…/exec"></label>
@@ -2003,7 +2014,29 @@ function sendToKnot(m){
   try{ f.contentWindow.postMessage('knot-inbox', location.origin); }catch(e){}
 }
 
+/* ---------- 사용 요금 (cost.js) ----------
+   메모 정리·AI 의견(memo), 매듭짓기(knot), 목소리(voice) 를 이 기기에서 쓴 만큼 어림해 더한다 */
+function costHtml(){
+  if (!window.NuemaCost) return '<p class="hint">요금 계산 파일(cost.js)을 불러오지 못했습니다.</p>';
+  const c = NuemaCost.month(), last = NuemaCost.month(NuemaCost.lastMonthKey()), w = NuemaCost.won;
+  return `<p style="font-size:1.4rem;font-weight:700;margin:0">약 ${w(c.total)}원</p>
+    <div class="cost-rows">
+      <div><span>메모 정리 · AI 의견</span><span>${w(c.memo)}원</span></div>
+      <div><span>매듭짓기</span><span>${w(c.knot)}원</span></div>
+      <div><span>목소리</span><span>${w(c.voice)}원</span></div>
+      <div><span>지난달</span><span>${w(last.total)}원</span></div>
+    </div>
+    <p class="hint">이 기기에서 쓴 만큼 앱이 구글 가격표로 계산한 대략치입니다 (1달러 = 1,400원). 다른 기기·다른 앱에서 같은 키로 쓴 건 빠집니다. 정확한 금액은 <a href="https://aistudio.google.com/usage" target="_blank" rel="noopener">AI Studio 사용량</a>에서 확인하세요.</p>`;
+}
+function showCost(){
+  const b = $('#costBadge'); if (!window.NuemaCost){ b.hidden = true; return; }
+  b.innerHTML = `이번 달 <b>${NuemaCost.won(NuemaCost.month().total)}</b>원`; b.hidden = false;
+}
+$('#costBadge').onclick = () => openSettings();
+if (window.NuemaCost) NuemaCost.onChange(showCost);
+
 /* ---------- 시작 ---------- */
+showCost();
 memos.forEach(normalizeMemo);
 saveMemos();
 render();

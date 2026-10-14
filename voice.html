@@ -174,6 +174,8 @@ dialog h3{font-family:var(--serif);font-weight:400;margin:0 0 6px}
       <option value="gemini-3.8-flash-lite-tts">Flash-Lite — 빠르고 싼 편 (1분 약 13원)</option>
     </select>
     <p class="hint" id="modelHint"></p>
+    <button class="btn" id="checkModels" style="margin-top:6px">내 키로 쓸 수 있는 목소리 모델 확인</button>
+    <div class="clip" id="modelCheck"></div>
     <div class="row" style="margin-top:10px">
       <input type="text" id="tryText" value="오늘도 마음 한 조각을 배달하러 왔습니다.">
       <button class="btn" id="tryBtn">▶ 들어 보기</button>
@@ -225,6 +227,7 @@ dialog h3{font-family:var(--serif);font-weight:400;margin:0 0 6px}
     </div>
     <div class="bar"><i id="barFill"></i></div>
     <div class="clip" id="progress"></div>
+    <div class="clip" id="costLine"></div>
     <label class="f" for="gap">문장 사이 쉼</label>
     <select id="gap">
       <option value="0.3">짧게 (0.3초)</option>
@@ -244,6 +247,7 @@ dialog h3{font-family:var(--serif);font-weight:400;margin:0 0 6px}
 
 <div class="toast" id="toast"></div>
 
+<script src="cost.js"></script>
 <script>
 const $ = s => document.querySelector(s);
 const arr = x => Array.isArray(x) ? x : [];
@@ -402,19 +406,55 @@ function styleFor(line){
   return parts.join('; ');
 }
 function voiceModel(){ return st.voice.kind === 'base' ? st.model : (st.voice.model || st.model); }
+// 3.8 이후 음성 모델은 interactions(말투 칸·만든 목소리 지원), 그 전 모델(3.1·2.5 TTS)은 예전 generateContent 방식
+const newTts = m => /^gemini-(3\.[89]|[4-9])/.test(m);
 async function speak(text, style){
-  const content = {type: 'text', text};
-  if (style) content.annotations = [{type: 'speech_metadata', style}];
-  const j = await api('/interactions', {
-    model: voiceModel(),
-    input: [{type: 'user_input', content: [content]}],
-    response_format: {type: 'audio'},
-    generation_config: {speech_config: [{voice: st.voice.id}]}
-  });
+  const model = voiceModel();
+  let j;
+  if (newTts(model)){
+    const content = {type: 'text', text};
+    if (style) content.annotations = [{type: 'speech_metadata', style}];
+    j = await api('/interactions', {
+      model,
+      input: [{type: 'user_input', content: [content]}],
+      response_format: {type: 'audio'},
+      generation_config: {speech_config: [{voice: st.voice.id}]}
+    });
+  } else {
+    if (st.voice.kind !== 'base') throw new Error('만든 목소리는 3.8 음성 모델에서만 됩니다');
+    j = await api(`/models/${encodeURIComponent(model)}:generateContent`, {
+      contents: [{parts: [{text: style ? `Say this (${style}):\n${text}` : text}]}],
+      generationConfig: {responseModalities: ['AUDIO'], speechConfig: {voiceConfig: {prebuiltVoiceConfig: {voiceName: st.voice.id}}}}
+    });
+  }
   const b64 = findAudio(j);
   if (!b64) throw new Error('소리가 오지 않았습니다 (글이 너무 짧거나 막혔을 수 있음)');
-  return toPcm(b64ToBytes(b64));
+  const pcm = toPcm(b64ToBytes(b64));
+  if (window.NuemaCost) NuemaCost.addTts('voice', model, secs(pcm), text.length + (style || '').length);
+  return pcm;
 }
+// 내 키로 ListModels → 음성(tts) 모델만 골라 음질 칸에 채운다
+const MODEL_NAMES = {'gemini-3.8-flash-tts': 'Flash — 좋은 음질 (1분 약 20원)', 'gemini-3.8-flash-lite-tts': 'Flash-Lite — 빠르고 싼 편 (1분 약 13원)'};
+function renderModels(){
+  const ids = [...new Set(['gemini-3.8-flash-tts', 'gemini-3.8-flash-lite-tts', ...arr(st.ttsModels), st.model])];
+  $('#model').innerHTML = ids.map(id => `<option value="${esc(id)}">${esc(MODEL_NAMES[id] || id + (newTts(id) ? '' : ' (예전 방식)'))}</option>`).join('');
+  $('#model').value = st.model;
+}
+$('#checkModels').onclick = () => busy($('#checkModels'), '확인하는 중…', async () => {
+  const j = await api('/models?pageSize=200', null, 'GET');
+  const tts = arr(j.models).map(x => String(x.name || '').replace(/^models\//, '')).filter(id => /tts/i.test(id));
+  st.ttsModels = tts; save(); renderModels();
+  const has = id => tts.includes(id), el = $('#modelCheck');
+  if (has('gemini-3.8-flash-tts')){ el.className = 'clip ok'; el.textContent = `✓ 3.8 Flash 음성 모델을 쓸 수 있습니다 (음성 모델 ${tts.length}개)`; }
+  else if (tts.length){ el.className = 'clip bad'; el.textContent = `목록에 3.8 음성이 안 보입니다. 쓸 수 있는 것: ${tts.join(', ')} — 음질 칸에서 골라 ▶ 들어 보기로 확인하세요`; }
+  else { el.className = 'clip bad'; el.textContent = '이 키로는 음성 모델이 보이지 않습니다. 그래도 ▶ 들어 보기로 한 번 시험해 보세요'; }
+});
+function showCost(){
+  if (!window.NuemaCost) return;
+  const c = NuemaCost.month(), w = NuemaCost.won;
+  $('#costLine').textContent = `이번 달 목소리 약 ${w(c.voice)}원 · 누에마 전체 약 ${w(c.total)}원`;
+}
+if (window.NuemaCost) NuemaCost.onChange(showCost);
 
 /* ---------- ① 목소리 ---------- */
 function renderVoice(){
@@ -427,7 +467,7 @@ function renderVoice(){
   $('#mineEmpty').hidden = st.mine.length > 0;
   const v = st.voice;
   $('#curVoice').innerHTML = `지금 목소리: <b>${esc(v.name)}</b> ${v.kind === 'base' ? '(기본)' : '(내 목소리)'}`;
-  $('#model').value = st.model;
+  renderModels();
   $('#model').disabled = v.kind !== 'base';
   $('#modelHint').textContent = v.kind !== 'base' ? '만든 목소리는 만들 때 고른 음질로만 읽습니다.' : '';
 }
@@ -704,6 +744,7 @@ $('#bySentence').checked = st.bySentence;
 $('#gap').value = st.gap;
 renderVoice();
 renderLines();
+showCost();
 $('#keyWarn').hidden = !!apiKey();
 </script>
 </body>
