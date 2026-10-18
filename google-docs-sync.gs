@@ -1,8 +1,13 @@
 /**
- * 누에마 메모 → 구글 독스 연동 + 드라이브 백업 스크립트  (v4)
+ * 누에마 메모 → 구글 독스 연동 + 드라이브 백업 스크립트  (v5)
  *   - 다시 보내면 문서의 그 항목을 새 내용으로 바꿈 (이름표가 없는 예전 항목도 제목·날짜로 찾아 바꿈)
  *   - 앱에서 메모를 지우면 문서에서도 지움
  *   - v4: 내 드라이브 "누에마 메모 백업" 폴더에 메모 전체(최근 7개)와 녹음 파일을 백업하고, 새 폰에서 되살림
+ *   - v5: 매듭짓기의 그림·timeline.json 을 내 드라이브 "누에마쇼츠/<제목>" 폴더에 올림
+ *
+ * v4 에서 v5 로 바꿀 때 (새 권한은 필요 없음):
+ *  1. 이 프로젝트에서 코드를 전부 지우고 이 파일 내용을 붙여넣고 저장
+ *  2. "배포" → "배포 관리" → 연필(수정) → 버전: "새 버전" → "배포"   (URL 은 그대로)
  *
  * v3 에서 v4 로 바꿀 때 (이미 쓰고 있다면 이것만):
  *  1. script.google.com 의 이 프로젝트에서 코드를 전부 지우고 이 파일 내용을 붙여넣고 저장
@@ -30,10 +35,11 @@ const DOC_ID = '';          // 비워두면 자동 생성
 const DOC_NAME = '누에마 메모';
 const BACKUP_FOLDER = '누에마 메모 백업';
 const KEEP_BACKUPS = 7;      // 메모 전체 백업은 최근 몇 개까지 남길지
+const SHORTS_FOLDER = '누에마쇼츠';   // 매듭짓기 결과를 올릴 내 드라이브 폴더
 
 function doGet() {
   const doc = getDoc_();
-  return json_({ ok: true, v: 4, url: doc ? doc.getUrl() : '' });
+  return json_({ ok: true, v: 5, url: doc ? doc.getUrl() : '' });
 }
 
 /* 처음 한 번 편집기에서 실행해 드라이브 권한을 허용하고 백업 폴더를 만든다 */
@@ -96,9 +102,21 @@ function doPost(e) {
    bkRestore                            가장 최근 메모 전체 백업을 돌려줌
    bkAudioGet {id}                      녹음 하나를 base64 로 돌려줌
    bkDelete  {ids}                      지운 메모의 녹음을 휴지통으로 (30일 안에는 드라이브에서 되살릴 수 있음)
-   bkInfo                               백업 현황 */
+   bkInfo                               백업 현황
+   bkFile    {sub, name, mime, data}    매듭짓기 파일 하나를 "누에마쇼츠/<sub>/<name>" 에 (같은 이름은 새것으로 바꿈) */
 function backup_(p) {
   try {
+    if (p.action === 'bkFile') {
+      if (!p.name || !p.data) throw new Error('파일 내용이 비었습니다');
+      const clean = s => String(s || '').replace(/[\\/:*?"<>|]/g, ' ').trim().slice(0, 80);
+      const root = childFolder_(DriveApp.getRootFolder(), SHORTS_FOLDER);
+      const dir = childFolder_(root, clean(p.sub) || '매듭짓기');
+      const name = clean(p.name);
+      const old = dir.getFilesByName(name);
+      while (old.hasNext()) old.next().setTrashed(true);   // 다시 올리면 예전 것은 휴지통으로 (30일 안에 되살릴 수 있음)
+      dir.createFile(Utilities.newBlob(Utilities.base64Decode(p.data), p.mime || 'application/octet-stream', name));
+      return json_({ ok: true, url: dir.getUrl() });
+    }
     const folder = folder_();
     if (p.action === 'bkAudio') {
       if (!p.id || !p.data) throw new Error('녹음 내용이 비었습니다');
@@ -154,6 +172,11 @@ function folder_() {
   const folder = found.hasNext() ? found.next() : DriveApp.createFolder(BACKUP_FOLDER);
   props.setProperty('bk_folder', folder.getId());
   return folder;
+}
+
+function childFolder_(parent, name) {
+  const it = parent.getFoldersByName(name);
+  return it.hasNext() ? it.next() : parent.createFolder(name);
 }
 
 /* 메모 전체 백업 파일들, 최신 것부터 (이름에 날짜·시각이 들어 있어 이름순 = 시간순) */

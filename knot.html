@@ -187,7 +187,11 @@ dialog h3{font-family:var(--serif);font-weight:400;margin:0 0 6px}
       <button class="btn" id="btnCopyScript">대본 코드 복사</button>
       <button class="btn" id="btnTimeline">timeline.json 받기</button>
     </div>
-    <p class="hint">그림은 shorts-remotion/public/images 에, 대본 코드는 src/script.ts 의 title·parts 자리에 들어갑니다. 로드에게 "이걸로 새 쇼츠 만들어 줘" 하면 됩니다.</p>
+    <div class="row" style="margin-top:8px">
+      <button class="btn main" id="btnDrive">☁ 드라이브 누에마쇼츠에 올리기</button>
+    </div>
+    <p class="hint" id="driveDone">그림·기준 그림·timeline.json·대본 코드를 내 드라이브 "누에마쇼츠/제목" 폴더에 한 번에 올립니다. 다시 누르면 새것으로 바뀝니다.</p>
+    <p class="hint">그림은 shorts-remotion/public/images 에, 대본 코드는 src/script.ts 의 title·parts 자리에 들어갑니다. 드라이브에 올린 뒤 로드에게 "누에마쇼츠에 올린 걸로 새 쇼츠 만들어 줘" 하면 됩니다.</p>
     <pre class="code" id="scriptOut"></pre>
   </section>
 </div>
@@ -229,6 +233,21 @@ dialog h3{font-family:var(--serif);font-weight:400;margin:0 0 6px}
   <div class="row" style="margin-top:16px;justify-content:flex-end">
     <button class="btn" id="cfgCancel">닫기</button>
     <button class="btn main" id="cfgSave">저장</button>
+  </div>
+</dialog>
+
+<dialog id="dlgScript">
+  <h3>구글 스크립트를 v5로 바꾸기</h3>
+  <p class="hint" style="margin-top:0">메모 탭의 독스·백업에 쓰는 그 스크립트에 "누에마쇼츠에 올리기"를 더하는 일입니다. 한 번만 하면 되고, 주소(URL)와 권한은 그대로예요. 컴퓨터에서 하는 게 편합니다.</p>
+  <ol class="how" style="padding-left:28px">
+    <li>아래 <b>새 코드 복사</b>를 누르기</li>
+    <li>script.google.com 에서 <b>누에마 메모</b> 프로젝트 열기 → 코드를 전부 지우고 붙여넣기 → 저장(💾)</li>
+    <li>오른쪽 위 <b>배포 → 배포 관리 → 연필(수정) → 버전: 새 버전 → 배포</b><br>("새 배포"를 누르면 주소가 바뀌니 주의)</li>
+    <li>여기로 돌아와 ☁ 올리기를 다시 누르기</li>
+  </ol>
+  <div class="row" style="margin-top:16px;justify-content:flex-end">
+    <button class="btn" id="scriptClose">닫기</button>
+    <button class="btn main" id="scriptCopy">새 코드 복사</button>
   </div>
 </dialog>
 
@@ -995,10 +1014,62 @@ function scriptCode(){
 }
 function renderExport(){ if (proj.scenes.length) $('#scriptOut').textContent = scriptCode(); }
 $('#btnCopyScript').onclick = async () => { await copyText(scriptCode()); toast('대본 코드를 복사했습니다'); };
-$('#btnTimeline').onclick = () => {
-  const tl = {title: proj.title, style: curStyle().text, bible: proj.bible,
-    scenes: proj.scenes.map((s, i) => ({image: `images/${pad(i + 1)}.png`, lines: s.lines, ko: s.ko, prompt: scenePrompt(s)}))};
-  download(new Blob([JSON.stringify(tl, null, 2)], {type: 'application/json'}), 'timeline.json');
+const timelineBlob = () => new Blob([JSON.stringify({title: proj.title, style: curStyle().text, bible: proj.bible,
+  scenes: proj.scenes.map((s, i) => ({image: `images/${pad(i + 1)}.png`, lines: s.lines, ko: s.ko, prompt: scenePrompt(s)}))}, null, 2)], {type: 'application/json'});
+$('#btnTimeline').onclick = () => download(timelineBlob(), 'timeline.json');
+
+/* 드라이브 "누에마쇼츠/<제목>" 에 올리기 — 메모 탭의 구글 스크립트(독스·백업용, v5 이상)를 같이 쓴다.
+   파일 하나씩 보낸다 (그림 한 장이 몇 MB 라 한꺼번에 보내면 스크립트가 버거워함) */
+const scriptUrl = () => { const u = str(memoCfg().gdocUrl); return /^https:\/\/script\.google\.com\/macros\/s\/[\w-]+\/exec$/.test(u) ? u : ''; };
+async function readScriptJSON(res){
+  const t = await res.text();
+  try{ return JSON.parse(t); }catch(e){
+    if (/<!doctype|<html/i.test(t)) throw new Error('구글이 로그인 페이지를 돌려줬습니다. 배포 관리에서 액세스 권한이 "모든 사용자"인지 확인해 주세요');
+    throw new Error('스크립트 응답을 읽지 못했습니다');
+  }
+}
+const blobB64 = b => new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(String(r.result).split(',')[1]); r.onerror = rej; r.readAsDataURL(b); });
+let uploading = false;
+$('#btnDrive').onclick = async () => {
+  if (uploading) return;
+  const url = scriptUrl();
+  if (!url) return alert('메모 탭 → 설정의 "Apps Script 웹앱 URL"이 비어 있어요.\n구글 독스·드라이브 백업에 쓰는 그 주소를 먼저 넣어 주세요.');
+  if (!proj.scenes.length) return toast('장면을 먼저 만들어 주세요');
+  const b = $('#btnDrive'), label = b.textContent;
+  uploading = true; b.disabled = true; b.textContent = '스크립트 확인 중…';
+  try{
+    const v = (await readScriptJSON(await fetch(url))).v || 0;
+    if (v < 5){ $('#dlgScript').showModal(); throw new Error('구글 스크립트를 v5로 바꿔야 올릴 수 있어요'); }
+    const files = [];
+    for (let i = 0; i < proj.scenes.length; i++){
+      const img = await idb.get('scene:' + proj.scenes[i].id);
+      if (img) files.push({name: `${pad(i + 1)}.png`, blob: img});
+    }
+    const pics = files.length, ref = await idb.get(refKey());
+    if (ref) files.push({name: '기준그림.png', blob: ref});
+    files.push({name: 'timeline.json', blob: timelineBlob()});
+    files.push({name: '대본코드.txt', blob: new Blob([scriptCode()], {type: 'text/plain'})});
+    const sub = (proj.title || '').trim() || '제목 없음';
+    let folderUrl = '';
+    for (let k = 0; k < files.length; k++){
+      const f = files[k];
+      b.textContent = `올리는 중 ${k + 1}/${files.length}…`;
+      const d = await readScriptJSON(await fetch(url, {method: 'POST', body: JSON.stringify({action: 'bkFile', sub, name: f.name, mime: f.blob.type || 'application/octet-stream', data: await blobB64(f.blob)})}));
+      if (!d.ok) throw new Error(d.error || '스크립트가 실패를 돌려줬습니다');
+      folderUrl = d.url || folderUrl;
+    }
+    $('#driveDone').innerHTML = `올렸어요 — 그림 ${pics}장${pics < proj.scenes.length ? ` (그림 없는 장면 ${proj.scenes.length - pics}개)` : ''} · timeline.json · 대본 코드. ${folderUrl ? `<a href="${esc(folderUrl)}" target="_blank" rel="noopener">드라이브에서 보기</a>` : ''}`;
+    toast(`드라이브 누에마쇼츠/${sub} 에 올렸습니다`);
+  }catch(e){ toast('올리기 실패 — ' + (e.message || e)); }
+  uploading = false; b.disabled = false; b.textContent = label;
+};
+$('#scriptClose').onclick = () => $('#dlgScript').close();
+$('#scriptCopy').onclick = async () => {
+  try{
+    const res = await fetch('google-docs-sync.gs', {cache: 'no-store'});
+    if (!res.ok) throw new Error(res.status);
+    await copyText(await res.text()); toast('새 코드를 복사했습니다. 스크립트 편집기에 붙여넣으세요');
+  }catch(e){ toast('코드를 가져오지 못했습니다 — 인터넷을 확인해 주세요'); }
 };
 $('#btnDownAll').onclick = async () => {
   let n = 0;
