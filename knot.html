@@ -101,7 +101,7 @@ dialog h3{font-family:var(--serif);font-weight:400;margin:0 0 6px}
     <h1>매듭짓기</h1>
     <nav>
       <a class="link to-memo" href="./">메모로</a>
-      <button class="link" id="btnSettings">키 설정</button>
+      <button class="link" id="btnSettings">AI 설정</button>
     </nav>
   </header>
   <p class="lead">글을 장면으로 나누고, 장면끼리 이어지는 그림 프롬프트를 영어로 만듭니다.</p>
@@ -126,7 +126,7 @@ dialog h3{font-family:var(--serif);font-weight:400;margin:0 0 6px}
           <input type="file" id="refFile" accept="image/*" hidden>
           <button class="btn warn" id="refDel">빼기</button>
         </div>
-        <p class="hint">마음에 드는 그림 한 장. AI가 이 그림을 보고 인물과 그림체를 글로 옮겨 모든 장면에 똑같이 넣습니다. 그림을 그릴 때도 AI에게 같이 보내세요.</p>
+        <p class="hint">마음에 드는 그림 한 장. AI가 이 그림을 보고 인물과 그림체를 글로 옮겨 모든 장면에 똑같이 넣습니다. 🎨 그리기를 누르면 이 그림도 같이 보냅니다.</p>
       </div>
     </div>
   </section>
@@ -157,16 +157,22 @@ dialog h3{font-family:var(--serif);font-weight:400;margin:0 0 6px}
 
     <h2 style="margin-top:26px"><span class="n">4</span>장면과 프롬프트</h2>
     <div class="how">
-      <b>Gemini 앱에서 그리는 순서</b>
+      <b>🎨 앱에서 바로 그리기 (GPT, 장당 요금)</b>
       <ol>
-        <li>새 대화를 열고 기준 그림을 첨부한 뒤 <b>시작 메시지</b>를 붙여넣기</li>
-        <li>같은 대화에서 장면 01, 02… 프롬프트를 차례로 붙여넣기. 장면 02부터는 <b>앞 장면에서 받은 그림도 함께 첨부</b>하면 더 잘 이어집니다</li>
-        <li>80% 마음에 들면 다시 뽑지 말고 "수정 문장 복사"로 고치기</li>
+        <li>장면마다 <b>🎨 그리기</b>, 또는 아래 <b>🎨 전체 그리기</b>로 01부터 차례로</li>
+        <li>기준 그림과 바로 앞 장면 그림을 같이 보내서 인물·장소가 이어집니다</li>
+        <li>80% 마음에 들면 다시 그리지 말고 <b>GPT로 고치기</b>. 마음에 안 들면 <b>↩ 전 그림</b>으로 되돌리기</li>
+      </ol>
+      <b style="display:block;margin-top:8px">ChatGPT·Gemini 앱에서 그리기 (구독, 추가 요금 없음)</b>
+      <ol>
+        <li>장면마다 <b>ChatGPT로</b>를 누르면 프롬프트가 들어간 새 대화가 열립니다. 기준 그림은 거기서 직접 첨부하세요</li>
+        <li>한 대화에서 이어 그리려면: 새 대화에 기준 그림과 <b>시작 메시지</b>를 넣고, 장면 프롬프트를 차례로 복사해 붙여넣기</li>
         <li>받은 그림은 각 장면의 "그림 올리기"로 넣기</li>
       </ol>
     </div>
     <div class="row" style="margin-top:12px">
-      <button class="btn main" id="btnCopyStart">시작 메시지 복사</button>
+      <button class="btn main" id="btnDrawAll">🎨 전체 그리기</button>
+      <button class="btn" id="btnCopyStart">시작 메시지 복사</button>
       <button class="btn" id="btnCopyAll">프롬프트 모두 복사</button>
     </div>
     <div id="check"></div>
@@ -187,9 +193,38 @@ dialog h3{font-family:var(--serif);font-weight:400;margin:0 0 6px}
 </div>
 
 <dialog id="dlgSettings">
-  <h3>키 설정</h3>
-  <p class="hint" style="margin-top:0">Gemini 키는 누에마 메모와 같이 씁니다. 메모 설정에서 넣었다면 이미 들어와 있어요.</p>
-  <label class="f" for="cfgKey">Gemini API 키</label>
+  <h3>AI 설정</h3>
+  <label class="f" for="cfgAi">장면 나누기·프롬프트 만들기에 쓸 AI</label>
+  <select id="cfgAi">
+    <option value="gpt">GPT (OpenAI)</option>
+    <option value="gemini">Gemini (구글)</option>
+  </select>
+  <p class="hint">그림 바로 그리기(🎨)는 어느 쪽을 골라도 GPT로 그립니다.</p>
+
+  <h3 style="margin-top:18px;font-size:.95rem">GPT</h3>
+  <label class="f" for="cfgGptKey">OpenAI API 키</label>
+  <input type="password" id="cfgGptKey" autocomplete="off" placeholder="sk-…">
+  <p class="hint">platform.openai.com → API keys 에서 만듭니다. ChatGPT 구독과는 따로, 미리 충전한 금액에서 빠져나갑니다. 키는 이 기기에만 저장돼요.</p>
+  <label class="f" for="cfgGptModel">글 모델</label>
+  <select id="cfgGptModel">
+    <option value="gpt-6.1-sol">GPT-6.1 Sol — 균형 (추천)</option>
+    <option value="gpt-6-luna">GPT-6 Luna — 아주 싸고 빠름</option>
+    <option value="gpt-6-astra">GPT-6 Astra — 가장 똑똑, 5배 비쌈</option>
+  </select>
+  <label class="f" for="cfgImgModel">그림 모델</label>
+  <select id="cfgImgModel">
+    <option value="gpt-image-2.5-flare">GPT Image 2.5 Flare — 빠름 (추천)</option>
+    <option value="gpt-image-2.5-sunburst">GPT Image 2.5 Sunburst — 고치기가 더 정확</option>
+  </select>
+  <label class="f" for="cfgImgQuality">그림 품질 (1장 요금은 대략)</label>
+  <select id="cfgImgQuality">
+    <option value="low">낮음 — 약 25원, 구도 보기용</option>
+    <option value="medium">보통 — 약 65원 (추천)</option>
+    <option value="high">높음 — 약 200원, 영상에 쓸 최종본</option>
+  </select>
+
+  <h3 style="margin-top:18px;font-size:.95rem">Gemini</h3>
+  <label class="f" for="cfgKey">Gemini API 키 — 누에마 메모와 같이 씀</label>
   <input type="password" id="cfgKey" autocomplete="off">
   <div class="row" style="margin-top:16px;justify-content:flex-end">
     <button class="btn" id="cfgCancel">닫기</button>
@@ -248,6 +283,16 @@ const refKey = () => 'ref:' + curStyle().id;
 // 키는 누에마 메모 설정(nuema_cfg_v1)과 같이 쓴다. 메모 탭에서 바꿨을 수 있으니 매번 새로 읽는다
 const memoCfg = () => store.get('nuema_cfg_v1', {});
 const apiKey = () => str(memoCfg().key);
+// 매듭짓기만의 AI 설정: 글은 GPT·Gemini 중 고르고, 그림 바로 그리기는 GPT 로
+const knotCfg = () => Object.assign({ai: 'gpt', gptKey: '', gptModel: 'gpt-6.1-sol', imgModel: 'gpt-image-2.5-flare', imgQuality: 'medium'}, store.get('nuema_knot_cfg_v1', {}));
+const gptKey = () => str(knotCfg().gptKey);
+const aiName = () => knotCfg().ai === 'gpt' ? 'GPT' : 'Gemini';
+const aiKey = () => knotCfg().ai === 'gpt' ? gptKey() : apiKey();
+// 키가 없으면 알리고 설정을 연다 (gptOnly: 그림 그리기처럼 GPT 키가 꼭 있어야 할 때)
+function keyReady(gptOnly){
+  if (gptOnly ? gptKey() : aiKey()) return true;
+  toast(`${gptOnly ? 'OpenAI' : aiName()} API 키를 넣어 주세요`); openSettings(); return false;
+}
 
 /* ---------- 1. 그림체 ---------- */
 function renderStyles(){
@@ -357,7 +402,7 @@ const cleanBible = b => ({
 /* 받은 장면 그림을 AI가 직접 보고 크기 기준을 만든다 — 첫 장면 그림을 "크기의 정답"으로 삼는 방식.
    그림 속 크기가 현실과 어긋나 보이면 warn 으로 알려 준다 (그 그림은 먼저 고친 뒤 다시 올리는 게 좋다) */
 async function scaleFromImage(s){
-  if (!apiKey()){ toast('Gemini API 키를 넣어 주세요'); return openSettings(); }
+  if (!keyReady()) return;
   const b = proj.bible; if (!b) return;
   const i = proj.scenes.indexOf(s);
   const img = await blobPart(await idb.get('scene:' + s.id));
@@ -376,7 +421,7 @@ async function scaleFromImage(s){
 이 장면 설명: ${s.action}
 JSON으로만: {"scale":"","scale_ko":"","warn":""}`;
   try{
-    const {json} = await geminiJSON([img, {text: prompt}]);
+    const {json} = await aiJSON([img, {text: prompt}]);
     b.scale = str(json.scale); b.scale_ko = str(json.scale_ko); saveProj(); renderBible(); refreshPrompts();
     const warn = str(json.warn);
     if (warn) alert(`장면 ${pad(i + 1)} 그림으로 크기 기준을 만들었어요.\n\n그런데 이 그림에서 어색한 크기가 보여요:\n${warn}\n\n"받은 그림 조금 고치기"로 먼저 고친 뒤 다시 올리면 크기 기준도 다시 잡힙니다.`);
@@ -387,7 +432,7 @@ JSON으로만: {"scale":"","scale_ko":"","warn":""}`;
 
 /* 크기 기준만 따로 만들기 — 이미 장면을 나눈 작업에 나중에 채울 때 */
 async function fillScale(request){
-  if (!apiKey()){ toast('Gemini API 키를 넣어 주세요'); return openSettings(); }
+  if (!keyReady()) return;
   const b = proj.bible; if (!b) return;
   const btn = $('#btnScale'); btn.disabled = true; btn.textContent = '만드는 중…';
   const prompt = `그림책 이야기 설정표에 "크기 기준(scale)"을 써줘. 그림 AI가 장면마다 사물 크기를 다르게 그리는 문제를 막기 위한 거야.
@@ -399,7 +444,7 @@ ${b.scale ? `지금 크기 기준: ${b.scale}\n` : ''}${request ? `작가의 요
 본문 일부: ${proj.text.slice(0, 1500)}
 JSON으로만: {"scale":"","scale_ko":""}`;
   try{
-    const {json} = await geminiJSON([{text: prompt}]);
+    const {json} = await aiJSON([{text: prompt}]);
     b.scale = str(json.scale); b.scale_ko = str(json.scale_ko); saveProj(); renderBible(); refreshPrompts();
     toast('크기 기준을 넣었습니다. 모든 장면 프롬프트에 들어갔어요');
   }catch(e){ toast('실패 — ' + (e.message || e)); btn.disabled = false; btn.textContent = '크기 기준 채우기'; }
@@ -407,13 +452,13 @@ JSON으로만: {"scale":"","scale_ko":""}`;
 
 $('#btnSplit').onclick = async () => {
   if (!proj.text.trim()) return toast('본문을 먼저 붙여넣으세요');
-  if (!apiKey()){ toast('Gemini API 키를 넣어 주세요'); return openSettings(); }
+  if (!keyReady()) return;
   if (proj.scenes.length && !confirm('장면과 설정표를 새로 만듭니다. 지금 장면과 올린 그림은 사라집니다. 계속할까요?')) return;
   const b = $('#btnSplit'); b.disabled = true; b.textContent = '나누고 설계하는 중… (30초~1분)';
   try{
     const ref = await refPart();
     const parts = ref ? [ref, {text: splitPrompt(true)}] : [{text: splitPrompt(false)}];
-    const {json, used} = await geminiJSON(parts);
+    const {json, used} = await aiJSON(parts);
     const scenes = arr(json.scenes).map(cleanScene).filter(s => s.lines.length).map(s => Object.assign({id: uid()}, s));
     if (!scenes.length) throw new Error('장면을 받지 못했습니다');
     await clearScenes();
@@ -427,7 +472,7 @@ $('#btnSplit').onclick = async () => {
 
 /* 한 장면만 다시 설계 (요청 문장이 있으면 반영) */
 async function redoScene(s, request){
-  if (!apiKey()){ toast('Gemini API 키를 넣어 주세요'); return openSettings(); }
+  if (!keyReady()) return;
   const i = proj.scenes.indexOf(s), prev = proj.scenes[i - 1], next = proj.scenes[i + 1];
   const card = document.querySelector(`.scene[data-id="${s.id}"]`); card && card.classList.add('busy');
   const prompt = `에세이 그림책의 장면 ${i + 1}/${proj.scenes.length} 하나만 다시 설계해줘. 설정표(bible)는 그대로 지키고, 앞뒤 장면과 이어지게.
@@ -442,7 +487,7 @@ ${request ? `\n작가의 요청: ${request}\n` : ''}
 규칙: action/shot/light/link/keep 은 영어, ko 는 한국어. action 에서 cast 생김새는 다시 쓰지 말고 이름으로만. shot 은 앞뒤 장면과 겹치지 않게. keep 은 앞 장면까지 이야기로 바뀌어 이 장면에서도 유지돼야 하는 상태(없으면 빈 문자열). 그림 속에 글자는 없게.
 JSON으로만: {"ko":"","cast":[""],"action":"","shot":"","light":"","link":"","keep":""}`;
   try{
-    const {json} = await geminiJSON([{text: prompt}]);
+    const {json} = await aiJSON([{text: prompt}]);
     const c = cleanScene(Object.assign({}, json, {lines: s.lines}));
     Object.assign(s, {ko: c.ko, cast: c.cast, action: c.action, shot: c.shot, light: c.light, link: i === 0 ? '' : c.link, keep: c.keep});
     saveProj(); renderScenes();
@@ -458,8 +503,20 @@ function castLines(ids){
   const list = ids ? b.cast.filter(c => ids.includes(c.id)) : b.cast;
   return list.map(c => `- ${c.en}`).join('\n');
 }
+/* 첨부 그림 설명. mode 없음 = 한 대화에서 차례로 붙여넣는 프롬프트(시작 메시지와 함께)
+   {ref, prev} = 앱에서 바로 그리기 (실제로 같이 보내는 그림만 적는다) / 'new' = ChatGPT 새 대화 하나에 장면 하나 */
+function refLine(i, mode){
+  if (!mode) return i === 0
+    ? 'REFERENCE: Image 1 (the reference image) defines the character design and painting style. Keep every character visually identical to Image 1.'
+    : 'REFERENCES: Image 1 (the reference image from the start of this chat) defines the character design and painting style: keep every character visually identical to it. If the previous illustration is attached as Image 2, use it only for continuity of place, props and colors, and choose a new composition.';
+  if (mode === 'new') return 'REFERENCE: If an image is attached, it is the reference image: keep every character and the painting style visually identical to it.';
+  if (mode.ref && mode.prev) return 'REFERENCES: Image 1 is the reference image: it defines the character design and painting style, keep every character visually identical to it. Image 2 is the previous illustration of this story: use it only for continuity of place, props and colors, and choose a new composition.';
+  if (mode.ref) return 'REFERENCE: Image 1 is the reference image: it defines the character design and painting style. Keep every character visually identical to it.';
+  if (mode.prev) return 'REFERENCE: Image 1 is the previous illustration of this story: keep the characters and painting style identical to it, keep place, props and colors continuous, and choose a new composition.';
+  return '';
+}
 /* 순서: 장면(무엇을·어디서) → 카메라 → 빛 → 고정 인물·사물 → 무대·색 → 유지할 상태 → 이어짐 → 그림체 → 첨부 그림 역할 → 규칙 */
-function scenePrompt(s){
+function scenePrompt(s, mode){
   const i = proj.scenes.indexOf(s), n = proj.scenes.length, b = proj.bible || {};
   const cast = castLines(s.cast);
   return [
@@ -473,10 +530,9 @@ function scenePrompt(s){
     b.palette && `PALETTE: ${b.palette}`,
     s.keep && `MUST STAY THE SAME FROM EARLIER SCENES: ${s.keep}`,
     i > 0 && s.link && `CONTINUITY: ${s.link}`,
+    mode && b.arc && `COLOR AND LIGHT ACROSS THE STORY: ${b.arc}`,   // 시작 메시지 없이 따로 그릴 때는 흐름도 같이
     `STYLE: ${curStyle().text.trim()}`,
-    i === 0
-      ? 'REFERENCE: Image 1 (the reference image) defines the character design and painting style. Keep every character visually identical to Image 1.'
-      : 'REFERENCES: Image 1 (the reference image from the start of this chat) defines the character design and painting style: keep every character visually identical to it. If the previous illustration is attached as Image 2, use it only for continuity of place, props and colors, and choose a new composition.',
+    refLine(i, mode),
     RULES
   ].filter(Boolean).join('\n\n');
 }
@@ -510,7 +566,7 @@ function sheetPrompt(){
 }
 /* 받은 그림을 조금만 고칠 때: 한국어 요청 → "나머지는 그대로, 이것만" 영어 수정 문장 */
 async function editSentence(s, request){
-  if (!apiKey()){ toast('Gemini API 키를 넣어 주세요'); openSettings(); return null; }
+  if (!keyReady()) return null;
   const prompt = `그림 AI(Gemini) 대화에서 방금 받은 그림을 "다시 뽑지 않고 조금만 고치는" 영어 요청문을 써줘.
 - 첫 문장: 바꾸지 말아야 할 것을 분명히 (Keep the characters, their faces and clothes, the composition, the colors and the painting style exactly the same.)
 - 다음: 작가의 요청을 구체적인 영어로 (위치·크기·방향·색을 분명하게). 요청에 없는 건 건드리지 말 것.
@@ -519,7 +575,7 @@ async function editSentence(s, request){
 장면 설명: ${s.action}
 작가의 요청(한국어): ${request}
 JSON으로만: {"en":""}`;
-  const {json} = await geminiJSON([{text: prompt}]);
+  const {json} = await aiJSON([{text: prompt}]);
   return str(json.en);
 }
 
@@ -586,16 +642,19 @@ function renderScenes(){
       ${s.ko ? `<p class="desc"><b>그림</b>${esc(s.ko)}${s.cast.length ? ` <span style="color:var(--ink-3)">· ${s.cast.map(castName).map(esc).join(', ')}</span>` : ''}</p>` : '<p class="desc">아직 이 장면의 그림 설계가 없습니다. 아래 "다시 만들기"를 누르세요.</p>'}
       <pre class="prompt" data-prompt>${esc(scenePrompt(s))}</pre>
       <div class="row" style="margin-top:8px">
-        <button class="btn main" data-act="copy">프롬프트 복사</button>
+        <button class="btn main" data-act="draw">🎨 그리기</button>
+        <button class="btn" data-act="copy">프롬프트 복사</button>
+        <button class="btn" data-act="chatgpt">ChatGPT로</button>
       </div>
       <label class="f">프롬프트 고치기 — 그리기 전에 장면 설계를 바꿀 때</label>
       <div class="row">
         <input type="text" data-ask placeholder="예: 더 가까이, 저녁 빛으로" aria-label="프롬프트 고칠 점">
         <button class="btn ai" data-act="redo">프롬프트 다시 만들기</button>
       </div>
-      <label class="f">받은 그림 조금 고치기 — 다시 뽑지 말고 같은 대화에서 고칠 때</label>
+      <label class="f">받은 그림 조금 고치기 — 다시 그리지 말고 바꿀 것만 (앱에서 바로, 또는 그림 받은 대화에 붙일 문장 복사)</label>
       <div class="row">
-        <input type="text" data-edit placeholder="예: 컵을 왼쪽으로, 창밖을 더 밝게" aria-label="그림에서 바꿀 것">
+        <input type="text" data-edit placeholder="예: 컵을 왼쪽으로, 창밖을 더 밝게" aria-label="그림에서 바꿀 것" style="flex-basis:100%">
+        <button class="btn main" data-act="fix">🎨 GPT로 고치기</button>
         <button class="btn ai" data-act="edit">수정 문장 복사</button>
       </div>
       <details>
@@ -610,6 +669,7 @@ function renderScenes(){
         <div class="img" data-act="view">그림<br>없음</div>
         <label class="btn">그림 올리기<input type="file" accept="image/*" data-act="upload" hidden></label>
         <button class="btn" data-act="down">받기</button>
+        <button class="btn" data-act="undo" title="그리기·고치기 바로 전 그림으로">↩ 전 그림</button>
       </div>
       <button class="link" data-act="scaleimg" style="margin-top:6px">📏 이 그림으로 크기 기준 잡기${i === 0 ? ' (장면 01은 올리면 자동)' : ''}</button>
     </div>`).join('');
@@ -629,7 +689,7 @@ async function showSceneImg(id){
   if (b){ urls[id] = URL.createObjectURL(b); el.style.backgroundImage = `url(${urls[id]})`; el.textContent = ''; }
   else { delete urls[id]; el.style.backgroundImage = ''; el.innerHTML = '그림<br>없음'; }
 }
-async function clearScenes(){ for (const s of proj.scenes) await idb.del('scene:' + s.id); proj.scenes = []; }
+async function clearScenes(){ for (const s of proj.scenes){ await idb.del('scene:' + s.id); await idb.del('undo:' + s.id); } proj.scenes = []; }
 
 // 원문과 자막 줄을 이었을 때 똑같은지 (공백 무시) — AI가 글을 바꿨는지 확인
 const norm = s => s.replace(/\s+/g, '');
@@ -663,7 +723,7 @@ $('#scenes').addEventListener('change', async e => {
   if (e.target.dataset.act !== 'upload') return;
   const s = sceneOf(e.target), f = e.target.files[0]; if (!s || !f) return;
   await idb.set('scene:' + s.id, f); e.target.value = ''; showSceneImg(s.id);
-  if (proj.scenes.indexOf(s) === 0 && proj.bible && apiKey()) scaleFromImage(s);   // 첫 장면 그림 = 크기의 정답
+  if (proj.scenes.indexOf(s) === 0 && proj.bible && aiKey()) scaleFromImage(s);   // 첫 장면 그림 = 크기의 정답
   else toast('그림을 넣었습니다');
 });
 $('#scenes').addEventListener('click', async e => {
@@ -673,6 +733,27 @@ $('#scenes').addEventListener('click', async e => {
   switch (b.dataset.act){
     case 'copy':
       await copyText(scenePrompt(s)); toast(`장면 ${pad(i + 1)} 프롬프트를 복사했습니다`); break;
+    case 'draw': drawScene(s); break;
+    case 'chatgpt': {
+      // 주소에 글을 실어 새 대화를 연다. 폰 앱에선 글이 안 들어갈 수 있어 복사도 해 둔다
+      const t = 'Please generate this image.\n\n' + scenePrompt(s, 'new');
+      await copyText(t);
+      window.open('https://chatgpt.com/?q=' + encodeURIComponent(t), '_blank', 'noopener');
+      toast('ChatGPT를 열었어요. 글이 비어 있으면 붙여넣기 하세요 (복사해 뒀어요)'); break;
+    }
+    case 'fix': {
+      const input = b.closest('.scene').querySelector('[data-edit]'), req = input.value.trim();
+      if (!req) return toast('그림에서 바꿀 것을 적어 주세요');
+      if (await fixScene(s, req)) input.value = '';
+      break;
+    }
+    case 'undo': {
+      const old = await idb.get('undo:' + s.id); if (!old) return toast('되돌릴 전 그림이 없습니다');
+      const cur = await idb.get('scene:' + s.id);
+      await idb.set('scene:' + s.id, old);
+      if (cur) await idb.set('undo:' + s.id, cur); else await idb.del('undo:' + s.id);
+      showSceneImg(s.id); toast('전 그림으로 바꿨습니다. 한 번 더 누르면 다시 돌아와요'); break;
+    }
     case 'redo': {
       const input = b.closest('.scene').querySelector('[data-ask]');
       redoScene(s, input.value.trim()); break;
@@ -709,7 +790,7 @@ $('#scenes').addEventListener('click', async e => {
     }
     case 'del':
       if (!confirm(`장면 ${pad(i + 1)}을 지울까요? 자막 줄도 같이 빠집니다.`)) return;
-      proj.scenes.splice(i, 1); saveProj(); renderScenes(); idb.del('scene:' + s.id); break;
+      proj.scenes.splice(i, 1); saveProj(); renderScenes(); idb.del('scene:' + s.id); idb.del('undo:' + s.id); break;
     case 'scaleimg': scaleFromImage(s); break;
     case 'down': {
       const img = await idb.get('scene:' + s.id); if (!img) return toast('아직 올린 그림이 없습니다');
@@ -721,6 +802,30 @@ $('#scenes').addEventListener('click', async e => {
   }
 });
 $('#bigClose').onclick = () => $('#dlgImg').close();
+let drawingAll = false, drawAllStop = false;
+$('#btnDrawAll').onclick = async () => {
+  const b = $('#btnDrawAll');
+  if (drawingAll){ drawAllStop = true; b.textContent = '이번 장면까지만 그리고 멈춰요…'; return; }
+  if (!keyReady(true)) return;
+  let list = [];
+  for (const s of proj.scenes) if (!(await idb.get('scene:' + s.id))) list.push(s);   // 그림 없는 장면만
+  if (!list.length){
+    if (!confirm('모든 장면에 이미 그림이 있어요. 전부 새로 그릴까요? (지금 그림은 ↩ 전 그림으로 되돌릴 수 있어요)')) return;
+    list = proj.scenes.slice();
+  }
+  const won = {low: 25, medium: 65, high: 200}[knotCfg().imgQuality] || 65;
+  if (!confirm(`그림 ${list.length}장을 장면 순서대로 그립니다.\n약 ${(list.length * won).toLocaleString()}원, ${list.length}분쯤 걸려요. 시작할까요?`)) return;
+  drawingAll = true; drawAllStop = false;
+  let n = 0;
+  for (const s of list){
+    if (drawAllStop) break;
+    b.textContent = `그리는 중 ${n + 1}/${list.length} · 누르면 멈춤`;
+    if (!(await drawScene(s, true))) break;
+    n++;
+  }
+  drawingAll = false; b.textContent = '🎨 전체 그리기';
+  toast(n === list.length ? `그림 ${n}장을 다 그렸습니다` : `그림 ${n}장을 그리고 멈췄습니다`);
+};
 $('#btnCopyStart').onclick = async () => { await copyText(startMessage()); toast('시작 메시지를 복사했습니다. 기준 그림과 함께 보내세요'); };
 $('#btnCopyAll').onclick = async () => {
   const all = proj.scenes.map((s, i) => `===== 장면 ${pad(i + 1)} =====\n${scenePrompt(s)}`).join('\n\n');
@@ -762,6 +867,127 @@ async function geminiJSON(parts){
   throw lastErr;
 }
 
+/* ---------- GPT (OpenAI) ---------- */
+// 글은 Gemini 와 같은 모양의 parts([{text}, {inlineData}])를 받아서 바꿔 보낸다 — 위 함수들은 어느 AI든 그대로
+const aiJSON = parts => knotCfg().ai === 'gpt' ? gptJSON(parts) : geminiJSON(parts);
+const GPT_FALLBACK = ['gpt-6.1-sol', 'gpt-6-luna'];
+async function gptErr(res, model){
+  let e = {}; try{ e = (await res.json()).error || {}; }catch(x){}
+  const m = String(e.message || ''), code = String(e.code || e.type || '');
+  let ko = '';
+  if (res.status === 401) ko = 'OpenAI 키가 맞지 않습니다. AI 설정에서 다시 넣어 주세요';
+  else if (/insufficient_quota|billing/i.test(code + m)) ko = 'OpenAI 충전 금액이 없습니다 (platform.openai.com → Billing 에서 충전)';
+  else if (/verif/i.test(m)) ko = '이 그림 모델은 OpenAI 조직 인증이 먼저 필요합니다 (platform.openai.com → Settings → Organization)';
+  else if (/safety|moderation|content_policy/i.test(code + m)) ko = '그림 AI가 안전 규칙에 걸린다며 거절했습니다. 장면 설명을 조금 바꿔 보세요';
+  const err = new Error(ko || `${res.status} (${model}) ${m.slice(0, 120)}`);
+  err.final = !!ko; return err;
+}
+// 키가 틀리면 OpenAI 가 브라우저용 허락 표시 없이 답해서 이유 없이 "Failed to fetch" 만 뜬다 → 알아들을 말로
+async function gptFetch(url, opts){
+  try{ return await fetch(url, opts); }
+  catch(e){ const err = new Error('OpenAI에 연결하지 못했습니다. 키가 틀렸거나(AI 설정에서 확인) 인터넷이 끊겼을 수 있어요'); err.final = true; throw err; }
+}
+async function gptJSON(parts){
+  const main = knotCfg().gptModel;
+  const chain = [main, ...GPT_FALLBACK.filter(x => x !== main)];
+  const content = parts.map(p => p.inlineData
+    ? {type: 'image_url', image_url: {url: `data:${p.inlineData.mimeType};base64,${p.inlineData.data}`}}
+    : {type: 'text', text: p.text});
+  let lastErr = null;
+  for (const model of chain){
+    const res = await gptFetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST', headers: {'Content-Type': 'application/json', Authorization: 'Bearer ' + gptKey()},
+      body: JSON.stringify({model, messages: [{role: 'user', content}], response_format: {type: 'json_object'}, max_completion_tokens: 16384})
+    });
+    if (res.ok){
+      const d = await res.json();
+      if (window.NuemaCost) NuemaCost.addOpenAI('knot', model, d.usage);
+      const txt = (d.choices && d.choices[0] && d.choices[0].message && d.choices[0].message.content) || '';
+      if (!txt) throw new Error('AI가 빈 응답을 보냈습니다');
+      return {json: parseJSON(txt), used: model};
+    }
+    lastErr = await gptErr(res, model);
+    if (lastErr.final || ![404, 429, 500, 503].includes(res.status)) throw lastErr;
+  }
+  throw lastErr;
+}
+/* 그림: 같이 보낼 그림이 있으면 edits(그림 여러 장 + 글), 없으면 generations. 정사각 1024 */
+function b64Blob(b64, type){
+  const bin = atob(b64), u = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i);
+  return new Blob([u], {type});
+}
+async function gptImage(prompt, images){
+  const k = knotCfg(), model = k.imgModel, auth = {Authorization: 'Bearer ' + gptKey()};
+  let res;
+  if (images.length){
+    const fd = new FormData();
+    fd.append('model', model); fd.append('prompt', prompt); fd.append('size', '1024x1024'); fd.append('quality', k.imgQuality);
+    images.forEach((b, i) => fd.append('image[]', b, `image${i + 1}.${(b.type || 'image/png').split('/')[1]}`));
+    res = await gptFetch('https://api.openai.com/v1/images/edits', {method: 'POST', headers: auth, body: fd});
+  } else {
+    res = await gptFetch('https://api.openai.com/v1/images/generations', {
+      method: 'POST', headers: Object.assign({'Content-Type': 'application/json'}, auth),
+      body: JSON.stringify({model, prompt, size: '1024x1024', quality: k.imgQuality})
+    });
+  }
+  if (!res.ok) throw await gptErr(res, model);
+  const d = await res.json();
+  if (window.NuemaCost) NuemaCost.addOpenAI('knot', model, d.usage);
+  const b64 = d.data && d.data[0] && d.data[0].b64_json;
+  if (!b64) throw new Error('그림을 받지 못했습니다');
+  return b64Blob(b64, 'image/png');
+}
+// 새 그림을 넣기 전에 지금 그림을 undo:<장면> 에 한 장 남겨 둔다 (↩ 전 그림)
+async function putSceneImg(s, blob){
+  const old = await idb.get('scene:' + s.id);
+  if (old) await idb.set('undo:' + s.id, old);
+  await idb.set('scene:' + s.id, blob);
+  showSceneImg(s.id);
+}
+function cardBusy(s, on, label){
+  const card = document.querySelector(`.scene[data-id="${s.id}"]`); if (!card) return;
+  card.classList.toggle('busy', on);
+  const btn = card.querySelector('[data-act=draw]'); if (btn) btn.textContent = on && label ? label : '🎨 그리기';
+}
+/* 장면 하나 그리기 — 기준 그림(Image 1) + 바로 앞 장면 그림(Image 2)을 같이 보낸다 */
+async function drawScene(s, inLoop){
+  if (!keyReady(true)) return false;
+  const i = proj.scenes.indexOf(s);
+  const ref = await idb.get(refKey()), prev = i > 0 ? await idb.get('scene:' + proj.scenes[i - 1].id) : null;
+  cardBusy(s, true, '그리는 중… (1분쯤)');
+  if (!inLoop) toast(`장면 ${pad(i + 1)}을 그리는 중… 1분쯤 걸려요`);
+  try{
+    const blob = await gptImage(scenePrompt(s, {ref: !!ref, prev: !!prev}), [ref, prev].filter(Boolean));
+    await putSceneImg(s, blob);
+    cardBusy(s, false);
+    if (i === 0 && proj.bible && aiKey()) await scaleFromImage(s);   // 첫 장면 그림 = 크기의 정답
+    else toast(`장면 ${pad(i + 1)}을 그렸습니다`);
+    return true;
+  }catch(e){ cardBusy(s, false); toast('그림 실패 — ' + (e.message || e)); return false; }
+}
+/* 받은 그림 조금 고치기 — 지금 그림(Image 1) + 기준 그림(Image 2), 바꿀 것만 */
+async function fixScene(s, req){
+  if (!keyReady(true)) return false;
+  const i = proj.scenes.indexOf(s), cur = await idb.get('scene:' + s.id);
+  if (!cur){ toast('고칠 그림이 없습니다. 먼저 그리거나 올려 주세요'); return false; }
+  const ref = await idb.get(refKey()), b = proj.bible || {};
+  const prompt = [
+    'Edit Image 1, an illustration from a picture book.',
+    'Keep the characters, their faces and clothes, the composition, the colors and the painting style exactly the same.',
+    `Change only this (the request is written in Korean): ${req}`,
+    ref && 'Image 2 is the character reference: keep every character identical to it.',
+    b.scale && `SIZE AND SCALE: ${b.scale}`,
+    RULES
+  ].filter(Boolean).join('\n\n');
+  cardBusy(s, true); toast(`장면 ${pad(i + 1)} 그림을 고치는 중… 1분쯤 걸려요`);
+  try{
+    await putSceneImg(s, await gptImage(prompt, [cur, ref].filter(Boolean)));
+    cardBusy(s, false); toast(`장면 ${pad(i + 1)} 그림을 고쳤습니다. 마음에 안 들면 ↩ 전 그림`);
+    return true;
+  }catch(e){ cardBusy(s, false); toast('고치기 실패 — ' + (e.message || e)); return false; }
+}
+
 /* ---------- 내보내기 ---------- */
 function scriptCode(){
   const parts = proj.scenes.map((s, i) => `    {\n      image: "images/${pad(i + 1)}.png",\n      lines: [\n${s.lines.map(l => `        ${JSON.stringify(l)},`).join('\n')}\n      ],\n    },`).join('\n');
@@ -793,11 +1019,18 @@ async function copyText(t){
 }
 
 /* ---------- 키 설정 ---------- */
-function openSettings(){ $('#cfgKey').value = apiKey(); $('#dlgSettings').showModal(); }
+function openSettings(){
+  const k = knotCfg();
+  $('#cfgAi').value = k.ai; $('#cfgGptKey').value = k.gptKey; $('#cfgGptModel').value = k.gptModel;
+  $('#cfgImgModel').value = k.imgModel; $('#cfgImgQuality').value = k.imgQuality;
+  $('#cfgKey').value = apiKey(); $('#dlgSettings').showModal();
+}
 $('#btnSettings').onclick = openSettings;
 $('#cfgCancel').onclick = () => $('#dlgSettings').close();
 $('#cfgSave').onclick = () => {
   const c = memoCfg(); c.key = $('#cfgKey').value.trim(); store.set('nuema_cfg_v1', c);
+  store.set('nuema_knot_cfg_v1', {ai: $('#cfgAi').value, gptKey: $('#cfgGptKey').value.trim(), gptModel: $('#cfgGptModel').value,
+    imgModel: $('#cfgImgModel').value, imgQuality: $('#cfgImgQuality').value});
   $('#dlgSettings').close(); toast('저장했습니다');
 };
 

@@ -2024,9 +2024,10 @@ function costHtml(){
       <div><span>메모 정리 · AI 의견</span><span>${w(c.memo)}원</span></div>
       <div><span>매듭짓기</span><span>${w(c.knot)}원</span></div>
       <div><span>목소리</span><span>${w(c.voice)}원</span></div>
+      ${c.gpt > 0 ? `<div><span>└ 위 금액 중 GPT</span><span>${w(c.gpt)}원</span></div>` : ''}
       <div><span>지난달</span><span>${w(last.total)}원</span></div>
     </div>
-    <p class="hint">이 기기에서 쓴 만큼 앱이 구글 가격표로 계산한 대략치입니다 (1달러 = 1,400원). 다른 기기·다른 앱에서 같은 키로 쓴 건 빠집니다. 정확한 금액은 <a href="https://aistudio.google.com/usage" target="_blank" rel="noopener">AI Studio 사용량</a>에서 확인하세요.</p>`;
+    <p class="hint">이 기기에서 쓴 만큼 앱이 구글·OpenAI 가격표로 계산한 대략치입니다 (1달러 = 1,400원). 다른 기기·다른 앱에서 같은 키로 쓴 건 빠집니다. 정확한 금액은 <a href="https://aistudio.google.com/usage" target="_blank" rel="noopener">AI Studio 사용량</a>${c.gpt > 0 ? `·<a href="https://platform.openai.com/usage" target="_blank" rel="noopener">OpenAI 사용량</a>` : ''}에서 확인하세요.</p>`;
 }
 function showCost(){
   const b = $('#costBadge'); if (!window.NuemaCost){ b.hidden = true; return; }
