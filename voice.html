@@ -64,6 +64,7 @@ textarea.essay{min-height:200px;font-family:var(--serif)}
 .clip{font-size:.8rem;color:var(--ink-2);margin-top:6px}
 .clip.ok{color:var(--moss)}
 .clip.bad{color:var(--shu)}
+.err{font-size:.8rem;color:var(--shu);background:var(--paper-3);border-radius:6px;padding:8px 10px;margin:8px 0 0;word-break:break-word}
 .cur{font-size:.86rem;margin-top:10px;padding:8px 12px;border-radius:6px;background:var(--paper-3)}
 .cur b{font-weight:600}
 .mine{list-style:none;margin:8px 0 0;padding:0}
@@ -647,9 +648,20 @@ function addMine(j, name, kind, model){
   save(); renderVoice();
   document.querySelector('.seg [data-vt=mine]').click();
 }
+// 알림은 금방 사라져서, 목소리 만들기·복제처럼 칸(panel) 안의 버튼은 안 된 이유를 그 칸에 남겨 둔다
 async function busy(btn, label, fn){
-  const old = btn.textContent; btn.disabled = true; btn.textContent = label;
-  try{ return await fn(); }catch(e){ toast(e.message); console.error(e); } finally { btn.disabled = false; btn.textContent = old; }
+  const old = btn.textContent, panel = btn.closest('.panel');
+  btn.disabled = true; btn.textContent = label;
+  const prev = panel && panel.querySelector('.err'); if (prev) prev.remove();
+  try{ return await fn(); }
+  catch(e){
+    toast(e.message); console.error(e);
+    if (panel){
+      const p = document.createElement('p'); p.className = 'err';
+      p.textContent = `⚠ 안 된 이유: ${e.message}` + (e.status ? ' — 이 글을 그대로 로드에게 보여 주세요' : '');
+      panel.appendChild(p);
+    }
+  } finally { btn.disabled = false; btn.textContent = old; }
 }
 $('#pMake').onclick = () => busy($('#pMake'), '만드는 중…', async () => {
   const name = str($('#pName').value) || '새 목소리', desc = str($('#pDesc').value);
