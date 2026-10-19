@@ -224,6 +224,12 @@ header h1{font-weight:700;font-size:1.9rem;letter-spacing:.02em;display:flex;ali
 .cost-rows div{display:flex;justify-content:space-between;padding:7px 0;border-top:1px solid var(--line);font-size:.88rem}
 .cost-rows div:first-child{border-top:0}
 header h1 .script{font-family:"Dancing Script",cursive;font-weight:500;font-size:1.35rem;color:#A0664F;letter-spacing:0}
+header h1{white-space:nowrap}   /* 요금 칸이 생기면서 폰에서 "누에마 메 / 모"로 꺾이던 문제 */
+@media (max-width:400px){
+  header h1{font-size:1.6rem;gap:6px}
+  header h1 .script{font-size:1.15rem}
+  .cost-badge{margin-right:6px}
+}
 .icon-btn.gear{padding:6px;color:var(--ink);display:flex}
 .icon-btn.gear svg{width:26px;height:26px}
 .tabs{gap:28px;margin-top:14px}
