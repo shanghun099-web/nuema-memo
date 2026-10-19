@@ -93,6 +93,13 @@ dialog h3{font-family:var(--serif);font-weight:400;margin:0 0 6px}
 .toast{position:fixed;left:50%;bottom:calc(24px + env(safe-area-inset-bottom));transform:translateX(-50%);background:var(--ink);color:var(--paper);padding:9px 16px;border-radius:999px;font-size:.84rem;max-width:calc(100vw - 32px);opacity:0;pointer-events:none;transition:opacity .2s;z-index:10}
 .toast.on{opacity:1}
 .bigimg{width:100%;border-radius:6px;display:block}
+.projbar{display:flex;gap:8px;align-items:center;margin-top:14px}
+.projbar select{flex:1;min-width:0}
+.err{font-size:.8rem;color:var(--shu);background:var(--paper-3);border-radius:6px;padding:8px 10px;margin:10px 0 0;word-break:break-word}
+.castpic{display:flex;gap:10px;align-items:center;margin-top:8px}
+.castpic .thumb{width:72px;height:48px;border:1px dashed var(--line-2);border-radius:6px;background:var(--paper-3) center/cover no-repeat;flex:none;display:grid;place-items:center;font-size:.64rem;color:var(--ink-3);text-align:center;line-height:1.3;cursor:pointer}
+.castpic .row{gap:4px}
+.castpic .btn{padding:5px 10px;font-size:.78rem}
 </style>
 </head>
 <body>
@@ -105,6 +112,11 @@ dialog h3{font-family:var(--serif);font-weight:400;margin:0 0 6px}
     </nav>
   </header>
   <p class="lead">글을 장면으로 나누고, 장면끼리 이어지는 그림 프롬프트를 영어로 만듭니다.</p>
+  <div class="projbar">
+    <select id="projSel" aria-label="작품 고르기"></select>
+    <button class="btn" id="projNew">새 작품</button>
+    <button class="btn warn" id="projDel">삭제</button>
+  </div>
 
   <!-- 1. 그림체 -->
   <section class="step">
@@ -159,8 +171,9 @@ dialog h3{font-family:var(--serif);font-weight:400;margin:0 0 6px}
     <div class="how">
       <b>🎨 앱에서 바로 그리기 (GPT, 장당 요금)</b>
       <ol>
+        <li>먼저 위 설정표에서 인물·사물마다 <b>🎨 설정 그림 만들기</b></li>
         <li>장면마다 <b>🎨 그리기</b>, 또는 아래 <b>🎨 전체 그리기</b>로 01부터 차례로</li>
-        <li>기준 그림과 바로 앞 장면 그림을 같이 보내서 인물·장소가 이어집니다</li>
+        <li>그림체 기준 그림 + 그 장면에 나오는 인물·사물의 설정 그림을 같이 보내서 모양이 이어집니다</li>
         <li>80% 마음에 들면 다시 그리지 말고 <b>GPT로 고치기</b>. 마음에 안 들면 <b>↩ 전 그림</b>으로 되돌리기</li>
       </ol>
       <b style="display:block;margin-top:8px">ChatGPT·Gemini 앱에서 그리기 (구독, 추가 요금 없음)</b>
@@ -175,6 +188,12 @@ dialog h3{font-family:var(--serif);font-weight:400;margin:0 0 6px}
       <button class="btn" id="btnCopyStart">시작 메시지 복사</button>
       <button class="btn" id="btnCopyAll">프롬프트 모두 복사</button>
     </div>
+    <label class="f" for="prevMode">🎨 그릴 때 앞 장면 그림도 같이 보낼까요?</label>
+    <select id="prevMode">
+      <option value="auto">자동 — 설정 그림이 없는 장면만 (추천)</option>
+      <option value="on">항상 — 장소가 더 이어지지만 구도를 베끼기 쉬움</option>
+      <option value="off">보내지 않기</option>
+    </select>
     <div id="check"></div>
     <div id="scenes"></div>
   </section>
@@ -294,8 +313,23 @@ const DEFAULT_STYLE = {
 };
 let styles = store.get('nuema_styles_v1', null) || [DEFAULT_STYLE];
 // 프로젝트: 글 + 설정표(bible) + 장면들
-let proj = Object.assign({styleId: styles[0].id, title: '', text: '', count: 'auto', bible: null, scenes: []}, store.get('nuema_knot_v1', {}));
-const saveProj = () => store.set('nuema_knot_v1', proj);
+// 작품 여러 개: 목록 nuema_knot_list_v1 = {cur, items:[{id, title, at}]}, 작품마다 nuema_knot_p_<id>.
+// 예전 한 칸짜리(nuema_knot_v1)는 처음 열 때 첫 작품으로 옮긴다 (예전 칸은 지우지 않고 남겨 둠)
+const blankProj = () => ({id: uid(), styleId: styles[0].id, title: '', text: '', count: 'auto', bible: null, scenes: [], prevMode: 'auto', at: Date.now()});
+let plist = store.get('nuema_knot_list_v1', null);
+if (!plist || !arr(plist.items).length){
+  const first = Object.assign(blankProj(), store.get('nuema_knot_v1', {}));
+  if (!first.id) first.id = uid();
+  plist = {cur: first.id, items: [{id: first.id, title: first.title, at: Date.now()}]};
+  store.set('nuema_knot_p_' + first.id, first); store.set('nuema_knot_list_v1', plist);
+}
+const loadProj = id => Object.assign(blankProj(), store.get('nuema_knot_p_' + id, {}), {id});
+let proj = loadProj(plist.items.some(x => x.id === plist.cur) ? plist.cur : plist.items[0].id);
+const saveProj = () => {
+  proj.at = Date.now(); store.set('nuema_knot_p_' + proj.id, proj);
+  const it = plist.items.find(x => x.id === proj.id); if (it){ it.title = proj.title; it.at = proj.at; }
+  plist.cur = proj.id; store.set('nuema_knot_list_v1', plist);
+};
 const saveStyles = () => store.set('nuema_styles_v1', styles);
 const curStyle = () => styles.find(s => s.id === proj.styleId) || styles[0];
 const refKey = () => 'ref:' + curStyle().id;
@@ -354,16 +388,26 @@ function checkInbox(){
   const m = store.get('nuema_knot_inbox', null);
   if (!m) return;
   localStorage.removeItem('nuema_knot_inbox');
-  const busy = proj.text.trim() && proj.text.trim() !== str(m.text);
-  if (busy && !confirm(`메모 "${m.title || '제목 없음'}"을 가져올까요?\n지금 매듭짓기에 있는 글과 장면은 사라집니다.`)) return;
-  clearScenes().then(() => {
-    proj.title = str(m.title); proj.text = str(m.text); proj.bible = null; saveProj();
-    fillText(); renderAll();
-    $('#stepText').scrollIntoView({behavior: 'smooth'});
-    toast('메모를 가져왔습니다. 글을 다듬고 장면을 나눠 보세요');
-  });
+  // 같은 글이 이미 작품으로 있으면 그 작품을 열고, 비어 있는 작품이면 거기에, 아니면 새 작품으로 — 지금 작업은 지우지 않는다
+  const text = str(m.text);
+  const same = plist.items.find(it => str(store.get('nuema_knot_p_' + it.id, {}).text) === text);
+  if (same) switchProj(same.id);
+  else if (!proj.text.trim() && !proj.scenes.length){ proj.title = str(m.title); proj.text = text; saveProj(); fillText(); renderProjects(); }
+  else newProj(str(m.title), text);
+  $('#stepText').scrollIntoView({behavior: 'smooth'});
+  toast(same ? '이미 있던 작품을 열었습니다' : '메모를 새 작품으로 가져왔습니다. 예전 작품은 맨 위 목록에 그대로 있어요');
 }
 window.addEventListener('message', e => { if (e.origin === location.origin && e.data === 'knot-inbox') checkInbox(); });
+
+/* 알림은 금방 사라져서, 실패는 그 자리(장면 카드·단계 칸)에 남겨 둔다. 다음에 성공하면 지운다 */
+function showErr(box, msg){
+  if (!box) return;
+  let el = box.querySelector(':scope > .err');
+  if (!msg){ if (el) el.remove(); return; }
+  if (!el){ el = document.createElement('p'); el.className = 'err'; box.appendChild(el); }
+  el.textContent = '⚠ 안 된 이유: ' + msg;
+}
+const cardOf = s => document.querySelector(`.scene[data-id="${s.id}"]`);
 
 /* ---------- AI: 장면 나누기 + 설정표 ---------- */
 function splitPrompt(hasRef){
@@ -376,10 +420,10 @@ ${hasRef ? '\n첨부한 그림은 기준 그림이야. 그림 속 인물이 이 
 3. 장면은 ${n}. 시간·장소·감정이 바뀌는 곳에서 나눠. 장면 하나에 그림 하나.
 
 [이야기 설정표 bible — 모든 장면에 글자 그대로 반복해서 넣을 문장들]
-- cast: 두 장면 이상 나오는 인물과 중요한 사물. id(영문 소문자), ko(한국어 이름), ko_desc(한국어 설명 한 줄), en(영어 고정 묘사 1~2문장: 나이·체형·머리·얼굴·옷과 색 / 사물은 재질·색·크기·특징. 장면마다 달라지지 않는 것만. 옷·머리·사물의 주요 색은 색 이름 뒤에 HEX 코드를 붙여, 예: soft blue knit sweater (#5B7FA6)).
+- cast: 두 장면 이상 나오는 인물과 중요한 사물. id(영문 소문자), ko(한국어 이름), ko_desc(한국어 설명 한 줄), en(영어 고정 묘사 1~2문장: 나이·체형·머리·얼굴·옷과 색 / 사물은 재질·색·크기·특징. 장면마다 달라지지 않는 것만. 옷·머리·사물의 주요 색은 색 이름 뒤에 HEX 코드를 붙여, 예: soft blue knit sweater (#5B7FA6)). size(영어 한 줄: 실제 크기 cm + 사람 몸에 빗댄 크기. 예: about 40 cm long and as thin as a pencil, roughly the length of the woman's forearm. 사람은 키와 체형).
 - world: 이야기의 주 무대 (영어 1~2문장: 공간 구조, 재질, 소품, 기본 색) / world_ko: 한국어 한 줄
 - palette: 이야기 전체의 주요 색 4~6개를 영어 한 줄로, 색 이름과 HEX 코드 (예: dusty blue #7C93AE, warm amber #E3A857, ...)
-- scale: 크기 기준 (영어 2~4문장). 그림 AI가 장면마다 사물 크기를 다르게 그리지 않도록, 중요한 사물마다 실제 크기(cm)와 사람 몸에 빗댄 크기(손가락·손바닥·손목·팔뚝)를 함께, 그리고 사물끼리의 크기 관계를 적어. 예: The drain brush is about 40 cm long and as thin as a pencil, roughly the length of the woman's forearm. The drain pipe is about 4 cm wide, as thick as her wrist; the brush fits loosely inside it. / scale_ko: 한국어 한 줄
+- scale: 사물끼리의 크기 관계만 영어 1~2문장 (각 사물의 크기는 cast.size 에 따로). 예: The brush fits loosely inside the pipe, and the pipe is as thick as the woman's wrist. / scale_ko: 한국어 한 줄
 - arc: 이야기 흐름에 따라 빛과 색이 어떻게 변하는지 (영어 한 문장, 예: from cold blue dawn to warm golden afternoon) / arc_ko: 한국어 한 줄
 
 [장면마다]
@@ -394,7 +438,7 @@ ${hasRef ? '\n첨부한 그림은 기준 그림이야. 그림 속 인물이 이 
 - 감정은 과장된 표정보다 빛·공간·사물로. 그림 속에 글자는 없게.
 
 JSON으로만 답해:
-{"bible":{"cast":[{"id":"","ko":"","ko_desc":"","en":""}],"world":"","world_ko":"","palette":"","scale":"","scale_ko":"","arc":"","arc_ko":""},
+{"bible":{"cast":[{"id":"","ko":"","ko_desc":"","en":"","size":""}],"world":"","world_ko":"","palette":"","scale":"","scale_ko":"","arc":"","arc_ko":""},
  "scenes":[{"lines":[""],"ko":"","cast":[""],"action":"","shot":"","light":"","link":"","keep":""}]}
 
 제목: ${proj.title || '(없음)'}
@@ -403,6 +447,13 @@ JSON으로만 답해:
 ${proj.text.trim()}`;
 }
 
+const castBrief = () => JSON.stringify(arr(proj.bible && proj.bible.cast).map(c => ({id: c.id, en: c.en, size: c.size || ''})));
+function applyScale(json){
+  const b = proj.bible, sizes = json.sizes && typeof json.sizes === 'object' ? json.sizes : {};
+  b.scale = str(json.scale); b.scale_ko = str(json.scale_ko);
+  b.cast.forEach(c => { if (str(sizes[c.id])) c.size = str(sizes[c.id]); });
+  saveProj(); renderBible(); refreshPrompts();
+}
 async function refPart(){ return blobPart(await idb.get(refKey())); }
 async function blobPart(b){
   if (!b) return null;
@@ -414,7 +465,7 @@ const cleanScene = s => ({
   ko: str(s.ko), cast: arr(s.cast).map(String), action: str(s.action), shot: str(s.shot), light: str(s.light), link: str(s.link), keep: str(s.keep)
 });
 const cleanBible = b => ({
-  cast: arr(b && b.cast).map(c => ({id: str(c.id) || uid(), ko: str(c.ko), ko_desc: str(c.ko_desc), en: str(c.en)})).filter(c => c.en),
+  cast: arr(b && b.cast).map(c => ({id: str(c.id) || uid(), ko: str(c.ko), ko_desc: str(c.ko_desc), en: str(c.en), size: str(c.size)})).filter(c => c.en),
   world: str(b && b.world), world_ko: str(b && b.world_ko), palette: str(b && b.palette), scale: str(b && b.scale), scale_ko: str(b && b.scale_ko), arc: str(b && b.arc), arc_ko: str(b && b.arc_ko)
 });
 
@@ -429,23 +480,21 @@ async function scaleFromImage(s){
   const card = document.querySelector(`.scene[data-id="${s.id}"]`); card && card.classList.add('busy');
   toast(`장면 ${pad(i + 1)} 그림을 보고 크기를 재는 중…`);
   const prompt = `첨부한 그림은 그림책의 장면 ${i + 1}이야. 이 그림 속 크기를 앞으로 모든 장면의 "크기 기준"으로 삼을 거야.
-그림을 자세히 보고 scale 을 써줘:
-- 그림에 보이는 중요한 사물마다, 인물의 몸(손가락·엄지·손바닥·손목·팔뚝)과 비교한 굵기·길이, 그리고 대략의 실제 크기(cm).
-- 사물끼리의 관계 (무엇이 무엇보다 굵은지, 무엇 안에 들어가는지).
-- 그림에 안 보이는 사물은 아래 지금 크기 기준을 그대로 살리거나, 보이는 것과 맞게 현실적으로.
-- 영어 2~5문장.
+그림을 자세히 보고 써줘:
+- sizes: 아래 인물·사물(id)마다 영어 한 줄. 실제 크기(cm)와 인물의 몸(손가락·엄지·손바닥·손목·팔뚝)에 빗댄 크기. 그림에 안 보이는 것은 지금 값을 살리거나 보이는 것과 맞게 현실적으로.
+- scale: 사물끼리의 관계만 영어 1~2문장 (무엇이 무엇보다 굵은지, 무엇 안에 들어가는지). 길게 쓰지 마.
 또 그림 속 크기가 현실이나 이야기와 어긋나 보이는 곳(예: 브러시가 배수관보다 굵음)이 있으면 warn 에 한국어로 짧게. 없으면 빈 문자열.
-인물·사물 설정: ${JSON.stringify(b.cast.map(c => c.en))}
+인물·사물 설정: ${castBrief()}
 지금 크기 기준: ${b.scale || '(없음)'}
 이 장면 설명: ${s.action}
-JSON으로만: {"scale":"","scale_ko":"","warn":""}`;
+JSON으로만: {"scale":"","scale_ko":"","sizes":{"<id>":""},"warn":""}`;
   try{
     const {json} = await aiJSON([img, {text: prompt}]);
-    b.scale = str(json.scale); b.scale_ko = str(json.scale_ko); saveProj(); renderBible(); refreshPrompts();
+    applyScale(json);
     const warn = str(json.warn);
     if (warn) alert(`장면 ${pad(i + 1)} 그림으로 크기 기준을 만들었어요.\n\n그런데 이 그림에서 어색한 크기가 보여요:\n${warn}\n\n"받은 그림 조금 고치기"로 먼저 고친 뒤 다시 올리면 크기 기준도 다시 잡힙니다.`);
     else toast(`장면 ${pad(i + 1)} 그림으로 크기 기준을 잡았습니다. 모든 프롬프트에 들어갔어요`);
-  }catch(e){ toast('크기 재기 실패 — ' + (e.message || e)); }
+  }catch(e){ toast('크기 재기 실패 — ' + (e.message || e)); showErr(cardOf(s), '크기 재기 — ' + (e.message || e)); }
   card && card.classList.remove('busy');
 }
 
@@ -455,18 +504,18 @@ async function fillScale(request){
   const b = proj.bible; if (!b) return;
   const btn = $('#btnScale'); btn.disabled = true; btn.textContent = '만드는 중…';
   const prompt = `그림책 이야기 설정표에 "크기 기준(scale)"을 써줘. 그림 AI가 장면마다 사물 크기를 다르게 그리는 문제를 막기 위한 거야.
-- 중요한 사물마다 실제 크기(cm)와 사람 몸에 빗댄 크기(손가락·손바닥·손목·팔뚝)를 함께, 그리고 사물끼리의 크기 관계(무엇이 무엇 안에 들어가는지, 어느 쪽이 더 굵은지)를 적어.
-- 영어 2~4문장. 이야기 내용에 맞게 현실적인 크기로.
+- sizes: 아래 인물·사물(id)마다 영어 한 줄. 실제 크기(cm)와 사람 몸에 빗댄 크기(손가락·손바닥·손목·팔뚝). 이야기 내용에 맞게 현실적으로.
+- scale: 사물끼리의 크기 관계만 영어 1~2문장 (무엇이 무엇 안에 들어가는지, 어느 쪽이 더 굵은지).
 ${b.scale ? `지금 크기 기준: ${b.scale}\n` : ''}${request ? `작가의 요청: ${request}\n` : ''}
-인물·사물: ${JSON.stringify(b.cast.map(c => c.en))}
+인물·사물: ${castBrief()}
 장소: ${b.world}
 본문 일부: ${proj.text.slice(0, 1500)}
-JSON으로만: {"scale":"","scale_ko":""}`;
+JSON으로만: {"scale":"","scale_ko":"","sizes":{"<id>":""}}`;
   try{
     const {json} = await aiJSON([{text: prompt}]);
-    b.scale = str(json.scale); b.scale_ko = str(json.scale_ko); saveProj(); renderBible(); refreshPrompts();
+    applyScale(json);
     toast('크기 기준을 넣었습니다. 모든 장면 프롬프트에 들어갔어요');
-  }catch(e){ toast('실패 — ' + (e.message || e)); btn.disabled = false; btn.textContent = '크기 기준 채우기'; }
+  }catch(e){ toast('실패 — ' + (e.message || e)); showErr($('#bible'), e.message || String(e)); btn.disabled = false; btn.textContent = '크기 기준 채우기'; }
 }
 
 $('#btnSplit').onclick = async () => {
@@ -485,7 +534,8 @@ $('#btnSplit').onclick = async () => {
     renderAll();
     $('#stepScenes').scrollIntoView({behavior: 'smooth'});
     toast(`${scenes.length}개 장면으로 나눴습니다 (${used})`);
-  }catch(e){ toast('실패 — ' + (e.message || e)); }
+    showErr($('#stepText'), '');
+  }catch(e){ toast('실패 — ' + (e.message || e)); showErr($('#stepText'), e.message || String(e)); }
   b.disabled = false; b.textContent = '장면 나누고 프롬프트 만들기';
 };
 
@@ -511,7 +561,7 @@ JSON으로만: {"ko":"","cast":[""],"action":"","shot":"","light":"","link":"","
     Object.assign(s, {ko: c.ko, cast: c.cast, action: c.action, shot: c.shot, light: c.light, link: i === 0 ? '' : c.link, keep: c.keep});
     saveProj(); renderScenes();
     toast(`장면 ${pad(i + 1)} 프롬프트를 새로 만들었습니다`);
-  }catch(e){ toast('실패 — ' + (e.message || e)); card && card.classList.remove('busy'); }
+  }catch(e){ toast('실패 — ' + (e.message || e)); card && card.classList.remove('busy'); showErr(card, e.message || String(e)); }
 }
 
 /* ---------- 프롬프트 조립 — 설정표 문장은 모든 장면에 글자 그대로 ---------- */
@@ -520,7 +570,15 @@ const RULES = 'Square 1:1 composition. A clean, wordless illustration: the whole
 function castLines(ids){
   const b = proj.bible || {cast: []};
   const list = ids ? b.cast.filter(c => ids.includes(c.id)) : b.cast;
-  return list.map(c => `- ${c.en}`).join('\n');
+  return list.map(c => `- ${c.en}${c.size ? ` Size: ${c.size}` : ''}`).join('\n');
+}
+/* 사물마다 크기(cast.size)가 있으면 각 인물·사물 줄에 붙으므로, 전체 크기 기준은 짧을 때만 관계로 덧붙인다
+   (예전처럼 긴 크기 글을 통째로 넣으면 그림 AI가 정작 장면 지시를 놓친다) */
+function scaleLine(ids){
+  const b = proj.bible || {}; if (!b.scale) return '';
+  const hasSizes = arr(b.cast).some(c => c.size && (!ids || ids.includes(c.id)));
+  if (!hasSizes) return `SIZE AND SCALE (keep the same in every illustration): ${b.scale}`;
+  return b.scale.length <= 400 ? `SIZE RELATIONS: ${b.scale}` : '';
 }
 /* 첨부 그림 설명. mode 없음 = 한 대화에서 차례로 붙여넣는 프롬프트(시작 메시지와 함께)
    {ref, prev} = 앱에서 바로 그리기 (실제로 같이 보내는 그림만 적는다) / 'new' = ChatGPT 새 대화 하나에 장면 하나 */
@@ -528,11 +586,21 @@ function refLine(i, mode){
   if (!mode) return i === 0
     ? 'REFERENCE: Image 1 (the reference image) defines the character design and painting style. Keep every character visually identical to Image 1.'
     : 'REFERENCES: Image 1 (the reference image from the start of this chat) defines the character design and painting style: keep every character visually identical to it. If the previous illustration is attached as Image 2, use it only for continuity of place, props and colors, and choose a new composition.';
+  if (mode.refs) return refsLine(mode.refs);
   if (mode === 'new') return 'REFERENCE: If an image is attached, it is the reference image: keep every character and the painting style visually identical to it.';
   if (mode.ref && mode.prev) return 'REFERENCES: Image 1 is the reference image: it defines the character design and painting style, keep every character visually identical to it. Image 2 is the previous illustration of this story: use it only for continuity of place, props and colors, and choose a new composition.';
   if (mode.ref) return 'REFERENCE: Image 1 is the reference image: it defines the character design and painting style. Keep every character visually identical to it.';
   if (mode.prev) return 'REFERENCE: Image 1 is the previous illustration of this story: keep the characters and painting style identical to it, keep place, props and colors continuous, and choose a new composition.';
   return '';
+}
+// 앱에서 바로 그릴 때 같이 보내는 그림 목록을 번호대로 설명한다
+function refsLine(refs){
+  if (!refs.length) return '';
+  return 'ATTACHED IMAGES:\n' + refs.map((r, k) => `- Image ${k + 1}: ` + (
+    r.role === 'style' ? 'painting style reference. Match its painting style, and keep any character shown in it visually identical.'
+    : r.role === 'cast' ? `reference sheet for "${r.c.id}". Draw it exactly like this sheet: same shape, colors, proportions and details.`
+    : 'the previous illustration of this story. Use it only for continuity of place, props and colors. Do not copy its composition or camera angle.'
+  )).join('\n');
 }
 /* 순서: 장면(무엇을·어디서) → 카메라 → 빛 → 고정 인물·사물 → 무대·색 → 유지할 상태 → 이어짐 → 그림체 → 첨부 그림 역할 → 규칙 */
 function scenePrompt(s, mode){
@@ -545,7 +613,7 @@ function scenePrompt(s, mode){
     s.light && `LIGHT: ${s.light}`,
     cast && `CHARACTERS AND OBJECTS (identical in every illustration):\n${cast}`,
     b.world && `SETTING: ${b.world}`,
-    b.scale && `SIZE AND SCALE (keep the same in every illustration): ${b.scale}`,
+    scaleLine(s.cast),
     b.palette && `PALETTE: ${b.palette}`,
     s.keep && `MUST STAY THE SAME FROM EARLIER SCENES: ${s.keep}`,
     i > 0 && s.link && `CONTINUITY: ${s.link}`,
@@ -605,10 +673,20 @@ function renderBible(){
   if (!b){ box.innerHTML = '<p class="hint" style="margin:0">장면을 나누면 AI가 설정표를 만듭니다.</p>'; return; }
   box.innerHTML = `
     <h3>등장인물·반복되는 사물</h3>
+    <p class="hint" style="margin:2px 0 0">🎨 설정 그림을 만들어 두면, 그 인물·사물이 나오는 장면을 그릴 때 같이 보내서 모양이 흔들리지 않아요. 장면을 그리기 전에 먼저 만드세요.</p>
     ${b.cast.map((c, k) => `<div class="cast-item">
         <div class="name">${esc(c.ko || c.id)}</div>
         <div class="ko">${esc(c.ko_desc)}</div>
         <textarea class="en" data-b="cast" data-k="${k}" aria-label="${esc(c.ko)} 영어 묘사">${esc(c.en)}</textarea>
+        <input type="text" data-b="size" data-k="${k}" value="${esc(c.size || '')}" placeholder="크기 (영어 한 줄) 예: about 21 × 15 cm, as long as a spread hand" aria-label="${esc(c.ko)} 크기" style="margin-top:4px;font-size:.84rem">
+        <div class="castpic">
+          <div class="thumb" data-k="${k}">설정<br>그림 없음</div>
+          <div class="row">
+            <button class="btn ai" data-castact="make" data-k="${k}">🎨 설정 그림 만들기</button>
+            <label class="btn">올리기<input type="file" accept="image/*" data-castact="up" data-k="${k}" hidden></label>
+            <button class="btn warn" data-castact="del" data-k="${k}">빼기</button>
+          </div>
+        </div>
       </div>`).join('') || '<p class="hint">반복되는 인물·사물이 없습니다.</p>'}
     <h3 style="margin-top:16px">장소</h3>
     <div class="ko">${esc(b.world_ko)}</div>
@@ -632,11 +710,14 @@ function renderBible(){
       <div class="row" style="margin-top:8px"><button class="btn" id="btnCopySheet">인물 설정 그림 프롬프트 복사</button></div>
     </div>`;
   $('#btnScale').onclick = () => fillScale($('#scaleAsk').value.trim());
+  showCastImgs();
   $('#btnCopySheet').onclick = async () => { await copyText(sheetPrompt()); toast('복사했습니다. Gemini 앱 새 대화에 붙여넣으세요'); };
 }
 $('#bible').addEventListener('input', e => {
   const t = e.target, b = proj.bible; if (!b || !t.dataset.b) return;
-  if (t.dataset.b === 'cast') b.cast[+t.dataset.k].en = t.value; else b[t.dataset.b] = t.value;
+  if (t.dataset.b === 'cast') b.cast[+t.dataset.k].en = t.value;
+  else if (t.dataset.b === 'size') b.cast[+t.dataset.k].size = t.value;
+  else b[t.dataset.b] = t.value;
   saveProj(); refreshPrompts();
 });
 
@@ -886,6 +967,71 @@ async function geminiJSON(parts){
   throw lastErr;
 }
 
+/* ---------- 인물·사물 설정 그림 ----------
+   설정표의 인물·사물마다 기준 그림 한 장(cast:<작품>:<id>). 장면을 그릴 때 그 장면에 나오는 것만 골라 붙인다 */
+const castKey = c => `cast:${proj.id}:${c.id}`;
+async function clearCastImgs(){ for (const c of arr(proj.bible && proj.bible.cast)) await idb.del(castKey(c)); }
+async function showCastImgs(){
+  for (const el of document.querySelectorAll('#bible .castpic .thumb')){
+    const c = proj.bible.cast[+el.dataset.k]; if (!c) continue;
+    const b = await idb.get(castKey(c));
+    if (el.dataset.url) URL.revokeObjectURL(el.dataset.url);
+    if (b){ el.dataset.url = URL.createObjectURL(b); el.style.backgroundImage = `url(${el.dataset.url})`; el.textContent = ''; }
+    else { el.dataset.url = ''; el.style.backgroundImage = ''; el.innerHTML = '설정<br>그림 없음'; }
+  }
+}
+function castSheetPrompt(c, hasRef){
+  const b = proj.bible || {};
+  return [
+    'Create a reference sheet for ONE character or object from a picture book, on plain warm off-white paper.',
+    `SUBJECT: ${c.en}`,
+    c.size && `SIZE: ${c.size}`,
+    'If the subject is a person: full-body front view, three-quarter view, side view and back view, plus one close-up of the face with a calm expression, standing in a neat row with even spacing. If the subject is an object: one front view, one three-quarter view and one close-up of its details, plus one view with a human hand holding or touching it so its real size is obvious.',
+    b.palette && `PALETTE: ${b.palette}`,
+    `STYLE: ${curStyle().text.trim()}`,
+    hasRef && 'Image 1 is the painting style reference: match its painting style exactly.',
+    'Soft even daylight, no background scenery. A clean, wordless sheet: free of labels, lettering, arrows and watermarks.'
+  ].filter(Boolean).join('\n\n');
+}
+async function makeCastSheet(k, btn){
+  const c = proj.bible && proj.bible.cast[k]; if (!c || !keyReady(true)) return;
+  const item = btn.closest('.cast-item'), old = btn.textContent;
+  btn.disabled = true; btn.textContent = '그리는 중… (1분쯤)';
+  try{
+    const ref = await idb.get(refKey());
+    const blob = await gptImage(castSheetPrompt(c, !!ref), ref ? [ref] : [], '1536x1024');
+    await idb.set(castKey(c), blob); showCastImgs(); showErr(item, '');
+    toast(`'${c.ko || c.id}' 설정 그림을 만들었습니다. 이 인물·사물이 나오는 장면에 같이 보내요`);
+  }catch(e){ toast('설정 그림 실패 — ' + (e.message || e)); showErr(item, e.message || String(e)); }
+  btn.disabled = false; btn.textContent = old;
+}
+$('#bible').addEventListener('click', async e => {
+  const t = e.target.closest('[data-castact], .castpic .thumb'); if (!t || !proj.bible) return;
+  const k = +t.dataset.k, c = proj.bible.cast[k]; if (!c) return;
+  if (t.classList.contains('thumb')){ if (t.dataset.url){ $('#bigImg').src = t.dataset.url; $('#dlgImg').showModal(); } return; }
+  if (t.dataset.castact === 'make') makeCastSheet(k, t);
+  if (t.dataset.castact === 'del'){ await idb.del(castKey(c)); showCastImgs(); }
+});
+$('#bible').addEventListener('change', async e => {
+  const t = e.target; if (t.dataset.castact !== 'up' || !proj.bible) return;
+  const c = proj.bible.cast[+t.dataset.k], f = t.files[0]; if (!c || !f) return;
+  await idb.set(castKey(c), f); t.value = ''; showCastImgs(); toast('설정 그림을 넣었습니다');
+});
+/* 장면에 같이 보낼 그림: 그림체 기준 → 이 장면에 나오는 인물·사물 설정 그림(최대 4장) → 앞 장면 그림(설정에 따라)
+   앞 장면 그림은 장소가 이어지는 대신 구도를 베끼기 쉬워서, '자동'이면 설정 그림이 하나도 없을 때만 보낸다 */
+async function sceneRefs(s, withPrev = true){
+  const i = proj.scenes.indexOf(s), out = [];
+  const ref = await idb.get(refKey()); if (ref) out.push({blob: ref, role: 'style'});
+  for (const c of arr(proj.bible && proj.bible.cast).filter(c => s.cast.includes(c.id))){
+    if (out.filter(x => x.role === 'cast').length >= 4) break;
+    const b = await idb.get(castKey(c)); if (b) out.push({blob: b, role: 'cast', c});
+  }
+  const mode = proj.prevMode || 'auto';
+  const prevOn = mode === 'on' || (mode === 'auto' && !out.some(x => x.role === 'cast'));
+  if (withPrev && prevOn && i > 0){ const p = await idb.get('scene:' + proj.scenes[i - 1].id); if (p) out.push({blob: p, role: 'prev'}); }
+  return out;
+}
+
 /* ---------- GPT (OpenAI) ---------- */
 // 글은 Gemini 와 같은 모양의 parts([{text}, {inlineData}])를 받아서 바꿔 보낸다 — 위 함수들은 어느 AI든 그대로
 const aiJSON = parts => knotCfg().ai === 'gpt' ? gptJSON(parts) : geminiJSON(parts);
@@ -936,18 +1082,18 @@ function b64Blob(b64, type){
   for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i);
   return new Blob([u], {type});
 }
-async function gptImage(prompt, images){
+async function gptImage(prompt, images, size = '1024x1024'){
   const k = knotCfg(), model = k.imgModel, auth = {Authorization: 'Bearer ' + gptKey()};
   let res;
   if (images.length){
     const fd = new FormData();
-    fd.append('model', model); fd.append('prompt', prompt); fd.append('size', '1024x1024'); fd.append('quality', k.imgQuality);
+    fd.append('model', model); fd.append('prompt', prompt); fd.append('size', size); fd.append('quality', k.imgQuality);
     images.forEach((b, i) => fd.append('image[]', b, `image${i + 1}.${(b.type || 'image/png').split('/')[1]}`));
     res = await gptFetch('https://api.openai.com/v1/images/edits', {method: 'POST', headers: auth, body: fd});
   } else {
     res = await gptFetch('https://api.openai.com/v1/images/generations', {
       method: 'POST', headers: Object.assign({'Content-Type': 'application/json'}, auth),
-      body: JSON.stringify({model, prompt, size: '1024x1024', quality: k.imgQuality})
+      body: JSON.stringify({model, prompt, size, quality: k.imgQuality})
     });
   }
   if (!res.ok) throw await gptErr(res, model);
@@ -973,38 +1119,38 @@ function cardBusy(s, on, label){
 async function drawScene(s, inLoop){
   if (!keyReady(true)) return false;
   const i = proj.scenes.indexOf(s);
-  const ref = await idb.get(refKey()), prev = i > 0 ? await idb.get('scene:' + proj.scenes[i - 1].id) : null;
+  const refs = await sceneRefs(s);
   cardBusy(s, true, '그리는 중… (1분쯤)');
   if (!inLoop) toast(`장면 ${pad(i + 1)}을 그리는 중… 1분쯤 걸려요`);
   try{
-    const blob = await gptImage(scenePrompt(s, {ref: !!ref, prev: !!prev}), [ref, prev].filter(Boolean));
+    const blob = await gptImage(scenePrompt(s, {refs}), refs.map(r => r.blob));
     await putSceneImg(s, blob);
-    cardBusy(s, false);
+    cardBusy(s, false); showErr(cardOf(s), '');
     if (i === 0 && proj.bible && aiKey()) await scaleFromImage(s);   // 첫 장면 그림 = 크기의 정답
     else toast(`장면 ${pad(i + 1)}을 그렸습니다`);
     return true;
-  }catch(e){ cardBusy(s, false); toast('그림 실패 — ' + (e.message || e)); return false; }
+  }catch(e){ cardBusy(s, false); toast('그림 실패 — ' + (e.message || e)); showErr(cardOf(s), e.message || String(e)); return false; }
 }
 /* 받은 그림 조금 고치기 — 지금 그림(Image 1) + 기준 그림(Image 2), 바꿀 것만 */
 async function fixScene(s, req){
   if (!keyReady(true)) return false;
   const i = proj.scenes.indexOf(s), cur = await idb.get('scene:' + s.id);
   if (!cur){ toast('고칠 그림이 없습니다. 먼저 그리거나 올려 주세요'); return false; }
-  const ref = await idb.get(refKey()), b = proj.bible || {};
+  const refs = await sceneRefs(s, false), b = proj.bible || {};
   const prompt = [
     'Edit Image 1, an illustration from a picture book.',
     'Keep the characters, their faces and clothes, the composition, the colors and the painting style exactly the same.',
     `Change only this (the request is written in Korean): ${req}`,
-    ref && 'Image 2 is the character reference: keep every character identical to it.',
+    refs.length && refs.map((r, k) => `Image ${k + 2} is ` + (r.role === 'style' ? 'the painting style and character reference: keep characters identical to it.' : `the reference sheet for "${r.c.id}": keep it identical to the sheet.`)).join('\n'),
     b.scale && `SIZE AND SCALE: ${b.scale}`,
     RULES
   ].filter(Boolean).join('\n\n');
   cardBusy(s, true); toast(`장면 ${pad(i + 1)} 그림을 고치는 중… 1분쯤 걸려요`);
   try{
-    await putSceneImg(s, await gptImage(prompt, [cur, ref].filter(Boolean)));
-    cardBusy(s, false); toast(`장면 ${pad(i + 1)} 그림을 고쳤습니다. 마음에 안 들면 ↩ 전 그림`);
+    await putSceneImg(s, await gptImage(prompt, [cur, ...refs.map(r => r.blob)]));
+    cardBusy(s, false); showErr(cardOf(s), ''); toast(`장면 ${pad(i + 1)} 그림을 고쳤습니다. 마음에 안 들면 ↩ 전 그림`);
     return true;
-  }catch(e){ cardBusy(s, false); toast('고치기 실패 — ' + (e.message || e)); return false; }
+  }catch(e){ cardBusy(s, false); toast('고치기 실패 — ' + (e.message || e)); showErr(cardOf(s), e.message || String(e)); return false; }
 }
 
 /* ---------- 내보내기 ---------- */
@@ -1060,7 +1206,8 @@ $('#btnDrive').onclick = async () => {
     }
     $('#driveDone').innerHTML = `올렸어요 — 그림 ${pics}장${pics < proj.scenes.length ? ` (그림 없는 장면 ${proj.scenes.length - pics}개)` : ''} · timeline.json · 대본 코드. ${folderUrl ? `<a href="${esc(folderUrl)}" target="_blank" rel="noopener">드라이브에서 보기</a>` : ''}`;
     toast(`드라이브 누에마쇼츠/${sub} 에 올렸습니다`);
-  }catch(e){ toast('올리기 실패 — ' + (e.message || e)); }
+    showErr($('#exportStep'), '');
+  }catch(e){ toast('올리기 실패 — ' + (e.message || e)); showErr($('#exportStep'), e.message || String(e)); }
   uploading = false; b.disabled = false; b.textContent = label;
 };
 $('#scriptClose').onclick = () => $('#dlgScript').close();
@@ -1105,9 +1252,42 @@ $('#cfgSave').onclick = () => {
   $('#dlgSettings').close(); toast('저장했습니다');
 };
 
+/* ---------- 작품 목록 ---------- */
+const DRIVE_HINT = $('#driveDone').innerHTML;
+function renderProjects(){
+  const items = plist.items.slice().sort((a, b) => b.at - a.at);
+  $('#projSel').innerHTML = items.map(x => `<option value="${x.id}">${esc(x.title || '제목 없는 작품')}</option>`).join('');
+  $('#projSel').value = proj.id;
+  $('#prevMode').value = proj.prevMode || 'auto';
+}
+function switchProj(id){
+  proj = loadProj(id); plist.cur = id; store.set('nuema_knot_list_v1', plist);
+  $('#driveDone').innerHTML = DRIVE_HINT;
+  renderStyles(); fillText(); renderAll(); renderProjects();
+}
+function newProj(title, text){
+  const n = Object.assign(blankProj(), {styleId: proj.styleId, title: title || '', text: text || ''});
+  store.set('nuema_knot_p_' + n.id, n); plist.items.push({id: n.id, title: n.title, at: n.at});
+  switchProj(n.id);
+}
+$('#projSel').onchange = e => switchProj(e.target.value);
+$('#projNew').onclick = () => { newProj(); $('#title').focus(); toast('새 작품을 열었습니다. 예전 작품은 위 목록에 그대로 있어요'); };
+$('#projDel').onclick = async () => {
+  if (!confirm(`'${proj.title || '제목 없는 작품'}' 작품을 지울까요? 장면·그림·설정 그림도 같이 지워집니다.`)) return;
+  await clearScenes(); await clearCastImgs();
+  localStorage.removeItem('nuema_knot_p_' + proj.id);
+  plist.items = plist.items.filter(x => x.id !== proj.id);
+  if (!plist.items.length) return newProj();
+  switchProj(plist.items.slice().sort((a, b) => b.at - a.at)[0].id);
+};
+$('#prevMode').onchange = e => { proj.prevMode = e.target.value; saveProj(); };
+// 폰이 저장 공간을 정리할 때 그림·녹음을 지우지 않도록 브라우저에 요청 (안 들어줘도 앱은 그대로 동작)
+if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
+
 renderStyles();
 fillText();
 renderAll();
+renderProjects();
 checkInbox();
 </script>
 </body>

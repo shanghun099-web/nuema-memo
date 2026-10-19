@@ -1042,6 +1042,8 @@ showCost();
 measureOld();
 $('#keyWarn').hidden = !!apiKey();
 showPaidKey();
+// 폰이 저장 공간을 정리할 때 녹음·그림을 지우지 않도록 브라우저에 요청 (안 들어줘도 앱은 그대로 동작)
+if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
 </script>
 </body>
 </html>
