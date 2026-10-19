@@ -59,7 +59,8 @@ textarea.en{font-size:.84rem;line-height:1.55;min-height:64px}
 .bible h3{font-family:var(--serif);font-weight:400;font-size:.95rem;margin:0}
 .bible .ko{font-size:.8rem;color:var(--ai);margin:2px 0 4px}
 .cast-item{margin-top:12px}
-.cast-item .name{font-size:.84rem;font-weight:600}
+.cast-item .name{font-size:.84rem;font-weight:600;display:flex;align-items:center;gap:8px}
+.cast-item select.kind{width:auto;padding:2px 8px;font-size:.74rem;font-weight:400;border-radius:999px}
 
 /* 장면 카드 */
 .scene{background:var(--paper-2);border:1px solid var(--line);border-radius:10px;padding:14px;margin-top:14px}
@@ -445,7 +446,7 @@ const cardOf = s => document.querySelector(`.scene[data-id="${s.id}"]`);
 /* ---------- AI: 장면 나누기 + 설정표 ---------- */
 // 설정표 만드는 규칙 — 장면 나누기와 "설정표만 다시 만들기"가 같이 쓴다
 const BIBLE_RULES = `[이야기 설정표 bible — 모든 장면에 글자 그대로 반복해서 넣을 문장들]
-- cast: 두 장면 이상 나오는 인물과 중요한 사물. id(영문 소문자), ko(한국어 이름), ko_desc(한국어 설명 한 줄), en(영어 고정 묘사 1~2문장: 나이·체형·머리·얼굴·옷과 색 / 사물은 재질·색·크기·특징. 장면마다 달라지지 않는 것만. 옷·머리·사물의 주요 색은 색 이름 뒤에 HEX 코드를 붙여, 예: soft blue knit sweater (#5B7FA6). 사람은 마지막 문장에 몸에 지닌 것을 못 박아: 있는 것만 적고 "nothing else", 없으면 "No hat, glasses, jewelry or bag." 한쪽에만 있는 것은 왼쪽·오른쪽까지, 예: a silver watch on the LEFT wrist and nothing else). size(영어 한 줄: 실제 크기 cm + 사람 몸에 빗댄 크기. 예: about 40 cm long and as thin as a pencil, roughly the length of the woman's forearm. 사람은 키와 체형).
+- cast: 두 장면 이상 나오는 인물과 중요한 사물. id(영문 소문자), type(사람·동물 같은 등장인물이면 "person", 물건이면 "object"), ko(한국어 이름), ko_desc(한국어 설명 한 줄), en(영어 고정 묘사 1~2문장: 나이·체형·머리·얼굴·옷과 색 / 사물은 재질·색·크기·특징. 장면마다 달라지지 않는 것만. 옷·머리·사물의 주요 색은 색 이름 뒤에 HEX 코드를 붙여, 예: soft blue knit sweater (#5B7FA6). 사람은 마지막 문장에 몸에 지닌 것을 못 박아: 있는 것만 적고 "nothing else", 없으면 "No hat, glasses, jewelry or bag." 한쪽에만 있는 것은 왼쪽·오른쪽까지, 예: a silver watch on the LEFT wrist and nothing else). size(영어 한 줄: 실제 크기 cm + 사람 몸에 빗댄 크기. 예: about 40 cm long and as thin as a pencil, roughly the length of the woman's forearm. 사람은 키와 체형).
 - world: 이야기의 주 무대 (영어 1~2문장: 공간 구조, 재질, 소품, 기본 색) / world_ko: 한국어 한 줄
 - palette: 이야기 전체의 주요 색 4~6개를 영어 한 줄로, 색 이름과 HEX 코드 (예: dusty blue #7C93AE, warm amber #E3A857, ...)
 - scale: 사물끼리의 크기 관계만 영어 1~2문장 (각 사물의 크기는 cast.size 에 따로). 예: The brush fits loosely inside the pipe, and the pipe is as thick as the woman's wrist. / scale_ko: 한국어 한 줄
@@ -474,7 +475,7 @@ ${BIBLE_RULES}
 - 감정은 과장된 표정보다 빛·공간·사물로. 그림 속에 글자는 없게.
 
 JSON으로만 답해:
-{"bible":{"cast":[{"id":"","ko":"","ko_desc":"","en":"","size":""}],"world":"","world_ko":"","palette":"","scale":"","scale_ko":"","arc":"","arc_ko":""},
+{"bible":{"cast":[{"id":"","type":"person","ko":"","ko_desc":"","en":"","size":""}],"world":"","world_ko":"","palette":"","scale":"","scale_ko":"","arc":"","arc_ko":""},
  "scenes":[{"lines":[""],"ko":"","cast":[""],"action":"","shot":"","light":"","link":"","keep":"","same_place":true}]}
 
 제목: ${proj.title || '(없음)'}
@@ -502,6 +503,12 @@ const cleanScene = s => Object.assign({
   lines: arr(s.lines).map(String).map(x => x.trim()).filter(Boolean),
   ko: str(s.ko), cast: arr(s.cast).map(String), action: str(s.action), shot: str(s.shot), light: str(s.light), link: str(s.link), keep: str(s.keep)
 }, boolOr(s.same_place) === undefined ? {} : {same_place: boolOr(s.same_place)});
+/* 사람인지 사물인지: AI가 적은 type 이 있으면 그대로, 예전 작품은 영어 설명에 사람을 가리키는 말이 있는지로 짐작한다.
+   틀리면 설정표의 "인물/사물" 칸에서 바꾼다 */
+function isPerson(c){
+  if (c.type) return c.type === 'person';
+  return /\b(man|woman|men|women|girl|boy|child|kid|person|lady|gentleman|grandmother|grandfather|grandma|grandpa|mother|father|mom|dad|he|she|his|her)\b/i.test(c.en || '');
+}
 /* 장면의 인물 이름을 설정표 id 와 정확히 맞춘다. AI가 "주인공"·"Nuema" 처럼 살짝 다르게 쓰면
    설정 그림이 조용히 빠지므로: 대소문자·띄어쓰기만 무시하고 id 또는 한국어 이름이 같은 것만 인정, 나머지는 뺀다 */
 function fixCast(ids, bible){
@@ -514,7 +521,8 @@ function fixCast(ids, bible){
   return out;
 }
 const cleanBible = b => ({
-  cast: arr(b && b.cast).map(c => ({id: str(c.id) || uid(), ko: str(c.ko), ko_desc: str(c.ko_desc), en: str(c.en), size: str(c.size)})).filter(c => c.en),
+  cast: arr(b && b.cast).map(c => Object.assign({id: str(c.id) || uid(), ko: str(c.ko), ko_desc: str(c.ko_desc), en: str(c.en), size: str(c.size)},
+    c.type === 'person' || c.type === 'object' ? {type: c.type} : {})).filter(c => c.en),
   world: str(b && b.world), world_ko: str(b && b.world_ko), palette: str(b && b.palette), scale: str(b && b.scale), scale_ko: str(b && b.scale_ko), arc: str(b && b.arc), arc_ko: str(b && b.arc_ko)
 });
 
@@ -664,7 +672,7 @@ function refLine(i, mode){
 function refsLine(refs){
   if (!refs.length) return '';
   return 'ATTACHED IMAGES:\n' + refs.map((r, k) => `- Image ${k + 1}: ` + (
-    r.role === 'style' ? 'painting style reference. Match its painting style, and keep any character shown in it visually identical.'
+    r.role === 'style' ? 'painting style reference. Match its painting style. If a person in it is one of this scene\'s characters, keep them visually identical; do not add anyone from it who is not in this scene.'
     : r.role === 'cast' ? `reference sheet for "${r.c.id}". Draw it exactly like this sheet: same shape, colors, proportions and details.`
     : 'the previous illustration of this story. Use it only for continuity of place, props and colors. Do not copy its composition or camera angle.'
   )).join('\n');
@@ -742,7 +750,10 @@ function renderBible(){
     <h3>등장인물·반복되는 사물</h3>
     <p class="hint" style="margin:2px 0 0">🎨 설정 그림을 만들어 두면, 그 인물·사물이 나오는 장면을 그릴 때 같이 보내서 모양이 흔들리지 않아요. 장면을 그리기 전에 먼저 만드세요.</p>
     ${b.cast.map((c, k) => `<div class="cast-item">
-        <div class="name">${esc(c.ko || c.id)}</div>
+        <div class="name">${esc(c.ko || c.id)}
+          <select class="kind" data-b="type" data-k="${k}" aria-label="${esc(c.ko || c.id)} 인물인지 사물인지">
+            <option value="person"${isPerson(c) ? ' selected' : ''}>인물</option><option value="object"${isPerson(c) ? '' : ' selected'}>사물</option>
+          </select></div>
         <div class="ko">${esc(c.ko_desc)}</div>
         <textarea class="en" data-b="cast" data-k="${k}" aria-label="${esc(c.ko)} 영어 묘사">${esc(c.en)}</textarea>
         <input type="text" data-b="size" data-k="${k}" value="${esc(c.size || '')}" placeholder="크기 (영어 한 줄) 예: about 21 × 15 cm, as long as a spread hand" aria-label="${esc(c.ko)} 크기" style="margin-top:4px;font-size:.84rem">
@@ -784,6 +795,7 @@ $('#bible').addEventListener('input', e => {
   const t = e.target, b = proj.bible; if (!b || !t.dataset.b) return;
   if (t.dataset.b === 'cast') b.cast[+t.dataset.k].en = t.value;
   else if (t.dataset.b === 'size') b.cast[+t.dataset.k].size = t.value;
+  else if (t.dataset.b === 'type') b.cast[+t.dataset.k].type = t.value;
   else b[t.dataset.b] = t.value;
   saveProj(); refreshPrompts();
 });
@@ -1054,17 +1066,33 @@ async function showCastImgs(){
     else { el.dataset.url = ''; el.style.backgroundImage = ''; el.innerHTML = '설정<br>그림 없음'; }
   }
 }
+/* 사람과 사물은 따로 부탁한다. 예전엔 "사람이면… 사물이면…"을 한 글에 같이 적고 기준 그림(인물이 있는 그림)을
+   "그림체만 보라"고만 붙여서, 종이 설정 그림에 기준 그림 속 여자아이와 가방이 그려졌다.
+   사물은 "사물 하나만, 사람 없이"를 분명히 하고, 기준 그림은 붓 느낌만 따라 하라고 못 박는다 */
 function castSheetPrompt(c, hasRef){
   const b = proj.bible || {};
-  return [
-    'Create a reference sheet for ONE character or object from a picture book, on plain warm off-white paper.',
+  const common = [
+    b.palette && `PALETTE: ${b.palette}`,
+    `STYLE: ${curStyle().text.trim()}`
+  ];
+  if (isPerson(c)) return [
+    'Create a character reference sheet for ONE person from a picture book, on plain warm off-white paper.',
     `SUBJECT: ${c.en}`,
     c.size && `SIZE: ${c.size}`,
-    'Show only what the description lists: no extra hats, glasses, jewelry, bags or accessories, and keep one-sided details (such as a watch) on the same side in every view.',
-    'If the subject is a person: full-body front view, three-quarter view, side view and back view, plus one close-up of the face with a calm expression, standing in a neat row with even spacing. If the subject is an object: one front view, one three-quarter view and one close-up of its details, plus one view with a human hand holding or touching it so its real size is obvious.',
-    b.palette && `PALETTE: ${b.palette}`,
-    `STYLE: ${curStyle().text.trim()}`,
-    hasRef && 'Image 1 is the painting style reference: match its painting style exactly.',
+    'Full-body front view, three-quarter view, side view and back view, plus one close-up of the face with a calm expression, standing in a neat row with even spacing. Only this one person appears on the sheet.',
+    'Show only what the description lists, with no extra hats, glasses, jewelry or accessories, and keep one-sided details (such as a watch) on the same side in every view.',
+    ...common,
+    hasRef && 'Image 1 is a painting style reference: match its brushwork, lines and colors. Draw the SUBJECT exactly as described above; if Image 1 shows this same person, keep their face and clothes identical, and leave out anyone else from Image 1.',
+    'Soft even daylight, no background scenery. A clean, wordless sheet: free of labels, lettering, arrows and watermarks.'
+  ].filter(Boolean).join('\n\n');
+  return [
+    'Create a prop reference sheet for ONE object from a picture book, on plain warm off-white paper. The subject is an object, not a person.',
+    `OBJECT: ${c.en}`,
+    c.size && `SIZE: ${c.size}`,
+    'Views of this object only: one front view, one three-quarter view and one close-up of its details, plus one view where a single bare hand (hand and wrist only) holds or touches it so its real size is obvious.',
+    'The sheet shows this one object and nothing else: no people, faces, bodies, clothing or other objects.',
+    ...common,
+    hasRef && 'Image 1 is only a painting style reference: copy its brushwork, lines and color mood, and leave out every person, character and object that appears in Image 1.',
     'Soft even daylight, no background scenery. A clean, wordless sheet: free of labels, lettering, arrows and watermarks.'
   ].filter(Boolean).join('\n\n');
 }
@@ -1402,7 +1430,7 @@ ${BIBLE_RULES}
 - scene_cast: 장면 순서대로 ${list.length}개의 배열. 각 장면에 보이는 cast id 를 위에서 새로 만든 bible.cast 의 id 글자 그대로만.
 
 JSON으로만 답해:
-{"bible":{"cast":[{"id":"","ko":"","ko_desc":"","en":"","size":""}],"world":"","world_ko":"","palette":"","scale":"","scale_ko":"","arc":"","arc_ko":""},
+{"bible":{"cast":[{"id":"","type":"person","ko":"","ko_desc":"","en":"","size":""}],"world":"","world_ko":"","palette":"","scale":"","scale_ko":"","arc":"","arc_ko":""},
  "scene_cast":[[""]]}
 
 제목: ${proj.title || '(없음)'}
