@@ -165,6 +165,9 @@ dialog h3{font-family:var(--serif);font-weight:400;margin:0 0 6px}
       <div class="panel">
         <h3>내 목소리 복제</h3>
         <p class="hint" style="margin-top:0">본인 목소리만 됩니다. 같은 장소, 같은 마이크로 두 가지를 녹음하세요.</p>
+        <label class="f" for="paidKey">유료 키 (복제 전용) — 구글이 복제는 유료 등급(Tier 1) 키에서만 허락해요</label>
+        <div class="row"><input type="password" id="paidKey" placeholder="AIza… (결제 연결한 프로젝트의 키)" autocomplete="off" style="flex:1;min-width:0"><button class="btn" id="paidKeySave">저장</button></div>
+        <div class="clip" id="paidKeyInfo"></div>
         <label class="f">① 내 목소리 (10~30초, 평소처럼 원고 읽기)</label>
         <div class="row">
           <button class="btn rec" id="srcRec">● 녹음</button>
@@ -372,6 +375,9 @@ const save = () => store.set('nuema_voice_v1', st);
 // 키는 누에마 메모 설정(nuema_cfg_v1)과 같이 쓴다. 메모 탭에서 바꿨을 수 있으니 매번 새로 읽는다
 const memoCfg = () => store.get('nuema_cfg_v1', {});
 const apiKey = () => str(memoCfg().key);
+// 유료 키(paidKey)는 복제처럼 유료 등급이 꼭 필요한 일에만 쓴다. 나머지(기본 목소리로 읽기 등)는 무료 키 그대로.
+// 구글의 '내 목소리'는 만든 프로젝트 안에만 있어서, 유료 키로 만든 목소리는 읽을 때·지울 때도 유료 키로 불러야 한다 (v.paid)
+const paidKey = () => str(memoCfg().paidKey);
 
 /* ---------- 소리 다루기 ---------- */
 function b64ToBytes(b64){ const s = atob(b64); const u = new Uint8Array(s.length); for (let i = 0; i < s.length; i++) u[i] = s.charCodeAt(i); return u; }
@@ -520,8 +526,9 @@ function pitchPlan(l, ref = refF0()){
 const fmtSec = s => s >= 60 ? `${Math.floor(s / 60)}분 ${Math.round(s % 60)}초` : `${s.toFixed(1)}초`;
 
 /* ---------- Gemini 호출 ---------- */
-async function api(path, body, method = 'POST'){
-  const key = apiKey();
+async function api(path, body, method = 'POST', paid = false){
+  const key = paid ? paidKey() : apiKey();
+  if (!key && paid) throw new Error('유료 키가 없습니다. 목소리 탭 → 새로 만들기 → 내 목소리 복제의 "유료 키" 칸에 넣어 주세요');
   if (!key){ $('#keyWarn').hidden = false; throw new Error('Gemini API 키가 없습니다'); }
   let r;
   try{
@@ -532,9 +539,15 @@ async function api(path, body, method = 'POST'){
   if (!r.ok){
     const msg = (j && j.error && j.error.message) || txt.slice(0, 200) || r.status;
     const e = new Error(r.status === 429 ? '잠시 너무 많이 요청했습니다 — 조금 뒤 다시' : `Gemini 오류 ${r.status}: ${msg}`);
-    e.status = r.status; throw e;
+    e.status = r.status; e.needPaid = /paid quota tier/i.test(String(msg)); throw e;
   }
   return j || {};
+}
+// 무료 키로 먼저 해 보고, 구글이 "유료 등급이 필요하다"고 하면 유료 키로 다시 — {j, paid}
+async function apiFreeFirst(path, body){
+  try{ return {j: await api(path, body), paid: false}; }
+  catch(e){ if (!e.needPaid) throw e; if (!paidKey()) throw new Error('이 기능은 유료 키가 필요합니다. 내 목소리 복제 칸의 "유료 키"에 넣어 주세요'); }
+  return {j: await api(path, body, 'POST', true), paid: true};
 }
 // 응답 어디에 있든 type:"audio" 의 data 를 찾는다 (steps[].content[] 또는 output_audio)
 function findAudio(j){
@@ -568,7 +581,7 @@ async function speak(text, style){
       input: [{type: 'user_input', content: [content]}],
       response_format: {type: 'audio'},
       generation_config: {speech_config: [{voice: st.voice.id}]}
-    });
+    }, 'POST', !!st.voice.paid);
   } else {
     if (st.voice.kind !== 'base') throw new Error('만든 목소리는 3.8 음성 모델에서만 됩니다');
     j = await api(`/models/${encodeURIComponent(model)}:generateContent`, {
@@ -610,7 +623,7 @@ function renderVoice(){
   $('#baseSel').innerHTML = BASE_VOICES.map(([n, d]) => `<option value="${n}">${n} — ${d}</option>`).join('');
   if (st.voice.kind === 'base') $('#baseSel').value = st.voice.id;
   $('#mineList').innerHTML = st.mine.map(v => `<li data-id="${esc(v.id)}">
-      <span class="nm">${esc(v.name)} <small>${v.kind === 'replicated' ? '복제' : '설명'} · ${v.model.includes('lite') ? 'Lite' : 'Flash'}</small></span>
+      <span class="nm">${esc(v.name)} <small>${v.kind === 'replicated' ? '복제' : '설명'} · ${v.model.includes('lite') ? 'Lite' : 'Flash'}${v.paid ? ' · 유료 키' : ''}</small></span>
       <button data-act="use">${st.voice.id === v.id ? '✓ 쓰는 중' : '쓰기'}</button>
       <button data-act="del">지우기</button></li>`).join('');
   $('#mineEmpty').hidden = st.mine.length > 0;
@@ -631,20 +644,20 @@ $('#model').onchange = () => { st.model = $('#model').value; save(); };
 $('#mineList').onclick = async e => {
   const b = e.target.closest('button'); if (!b) return;
   const id = b.closest('li').dataset.id, v = st.mine.find(x => x.id === id);
-  if (b.dataset.act === 'use'){ st.voice = {kind: v.kind, id: v.id, name: v.name, model: v.model}; save(); renderVoice(); toast(`'${v.name}' 목소리로 읽습니다`); }
+  if (b.dataset.act === 'use'){ st.voice = {kind: v.kind, id: v.id, name: v.name, model: v.model, paid: !!v.paid}; save(); renderVoice(); toast(`'${v.name}' 목소리로 읽습니다${v.paid ? ' (유료 키로 읽어요)' : ''}`); }
   if (b.dataset.act === 'del'){
     if (!confirm(`'${v.name}' 목소리를 지울까요? 구글 쪽에서도 지워집니다.`)) return;
-    try{ await api('/voices/' + encodeURIComponent(id), null, 'DELETE'); }catch(err){ if (err.status !== 404){ toast(err.message); return; } }
+    try{ await api('/voices/' + encodeURIComponent(id), null, 'DELETE', !!v.paid); }catch(err){ if (err.status !== 404){ toast(err.message); return; } }
     st.mine = st.mine.filter(x => x.id !== id);
     if (st.voice.id === id) st.voice = {kind: 'base', id: 'Charon', name: 'Charon', model: ''};
     save(); renderVoice();
   }
 };
-function addMine(j, name, kind, model){
+function addMine(j, name, kind, model, paid){
   const id = str(j.id) || str(j.name).split('/').pop();
   if (!id) throw new Error('목소리 번호가 오지 않았습니다');
-  st.mine.unshift({id, name, kind, model, at: Date.now()});
-  st.voice = {kind, id, name, model};
+  st.mine.unshift({id, name, kind, model, paid: !!paid, at: Date.now()});
+  st.voice = {kind, id, name, model, paid: !!paid};
   save(); renderVoice();
   document.querySelector('.seg [data-vt=mine]').click();
 }
@@ -667,8 +680,8 @@ $('#pMake').onclick = () => busy($('#pMake'), '만드는 중…', async () => {
   const name = str($('#pName').value) || '새 목소리', desc = str($('#pDesc').value);
   if (!desc) throw new Error('목소리 설명을 적어 주세요');
   const model = st.model;
-  const j = await api('/voices', {store: true, voice: {model, type: 'prompted', display_name: name, gender: $('#pGender').value, language_code: 'ko-KR', prompted: {input: desc}}});
-  addMine(j, name, 'prompted', model);
+  const {j, paid} = await apiFreeFirst('/voices', {store: true, voice: {model, type: 'prompted', display_name: name, gender: $('#pGender').value, language_code: 'ko-KR', prompted: {input: desc}}});
+  addMine(j, name, 'prompted', model, paid);
   const sa = j.sample_audio && j.sample_audio.data;
   if (sa) playPcm(toPcm(b64ToBytes(sa)));
   toast(`'${name}' 목소리를 만들었습니다`);
@@ -719,8 +732,9 @@ $('#rMake').onclick = () => busy($('#rMake'), '복제하는 중…', async () =>
   if (!clips.con) throw new Error('② 동의 녹음을 해 주세요');
   const name = str($('#rName').value) || '내 목소리', model = st.model;
   const wav = pcm => ({mime_type: 'audio/wav', data: bytesToB64(wavBytes(pcm))});
-  const j = await api('/voices', {store: true, voice: {model, type: 'replicated', display_name: name, replicated: {source_audio: wav(clips.src), consent_audio: wav(clips.con)}}});
-  addMine(j, name, 'replicated', model);
+  if (!paidKey()) throw new Error('복제는 유료 키가 필요합니다. 위 "유료 키" 칸에 넣고 저장해 주세요');
+  const j = await api('/voices', {store: true, voice: {model, type: 'replicated', display_name: name, replicated: {source_audio: wav(clips.src), consent_audio: wav(clips.con)}}}, 'POST', true);
+  addMine(j, name, 'replicated', model, true);
   toast(`'${name}' 목소리를 복제했습니다. ▶ 들어 보기로 확인하세요`);
 });
 $('#tryBtn').onclick = () => busy($('#tryBtn'), '만드는 중…', async () => {
@@ -1002,6 +1016,18 @@ $('#cfgKeySave').onclick = () => {
   $('#keyWarn').hidden = true; toast('키를 저장했습니다 (메모 앱과 같이 씁니다)');
 };
 
+function showPaidKey(){
+  const k = paidKey(), el = $('#paidKeyInfo');
+  el.className = 'clip ' + (k ? 'ok' : '');
+  el.textContent = k ? `✓ 유료 키 저장됨 (…${k.slice(-4)}) — 복제와 복제한 목소리로 읽을 때만 씁니다` : '없음 — 기본 목소리로 읽기는 무료 키로 그대로 됩니다';
+}
+$('#paidKeySave').onclick = () => {
+  const k = str($('#paidKey').value), c = memoCfg();
+  if (k && k === str(c.key)) return toast('무료 키와 같은 키예요. 결제를 연결한 프로젝트의 키를 넣어 주세요');
+  c.paidKey = k; store.set('nuema_cfg_v1', c);
+  $('#paidKey').value = ''; showPaidKey(); toast(k ? '유료 키를 저장했습니다' : '유료 키를 지웠습니다');
+};
+
 /* ---------- 시작 ---------- */
 $('#script').value = st.script || '';
 $('#baseStyle').value = st.baseStyle;
@@ -1015,6 +1041,7 @@ renderLines();
 showCost();
 measureOld();
 $('#keyWarn').hidden = !!apiKey();
+showPaidKey();
 </script>
 </body>
 </html>
