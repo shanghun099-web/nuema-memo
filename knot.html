@@ -659,9 +659,13 @@ JSON으로만: {"ko":"","cast":[""],"action":"","shot":"","layout":"","layout_ko
 const RULES = 'Square 1:1 composition. A clean, wordless illustration: the whole picture is free of lettering, captions, signs and watermarks.';
 /* 위치: 어느 쪽에서 보는지 + 무엇이 화면 어디에. AI가 쓴 영어(layout)가 있으면 그것, 작가가 한국어 칸을 고쳤으면 그 한국어를 그대로.
    (카메라를 "close-up of hands" 처럼 짧게만 적으면 종이가 옆으로 눕는 등 보는 방향을 AI가 마음대로 정했다) */
+// 위치 칸에는 한국어나 영어(로드 검토표의 "영어로 복사") 둘 다 붙일 수 있다 — 한글이 없으면 영어로 보고 그대로 넣는다
+const hasKo = t => /[가-힣]/.test(t || '');
 function layoutLine(s){
   if (s.layout) return `LAYOUT (camera viewpoint and positions, follow exactly): ${s.layout}`;
-  if (s.layout_ko) return `LAYOUT (written in Korean by the author; follow the camera viewpoint and positions exactly): ${s.layout_ko}`;
+  if (s.layout_ko) return hasKo(s.layout_ko)
+    ? `LAYOUT (written in Korean by the author; follow the camera viewpoint and positions exactly): ${s.layout_ko}`
+    : `LAYOUT (camera viewpoint and positions, follow exactly): ${s.layout_ko}`;
   return '';
 }
 // 말을 안 하면 그림 AI가 모자·시계·가방을 멋대로 붙이고, 왼손 시계를 오른손으로 옮긴다
@@ -850,7 +854,7 @@ function renderScenes(){
       </div>
       <textarea class="lines" data-f="lines" aria-label="자막 줄 (한 줄에 하나)">${esc(s.lines.join('\n'))}</textarea>
       ${s.ko ? `<p class="desc"><b>그림</b>${esc(s.ko)}${s.cast.length ? ` <span style="color:var(--ink-3)">· ${s.cast.map(castName).map(esc).join(', ')}</span>` : ''}</p>` : '<p class="desc">아직 이 장면의 그림 설계가 없습니다. 아래 "다시 만들기"를 누르세요.</p>'}
-      <label class="f">📐 위치 — 어느 쪽에서 보는지, 무엇이 화면 어디에 (고치면 그대로 그림에 들어가요)</label>
+      <label class="f">📐 위치 — 어느 쪽에서 보는지, 무엇이 화면 어디에 (고치면 그대로 그림에 들어가요 · 한국어·영어 모두 돼요)</label>
       <input type="text" data-f="layout_ko" value="${esc(s.layout_ko || '')}" placeholder="예: 위에서 내려다봄. 종이는 정면으로 평평하게 가운데, 오른손이 연필 끝을 아래 줄에">
       <div class="sketch">
         <div class="skimg" data-act="sketch" role="button" aria-label="구도 스케치 그리기">스케치<br>없음</div>
@@ -1304,7 +1308,7 @@ async function fixScene(s, req){
   const prompt = [
     'Edit Image 1, an illustration from a picture book.',
     'Keep the characters, their faces and clothes, the composition, the colors and the painting style exactly the same.',
-    `Change only this (the request is written in Korean): ${req}`,
+    `Change only this${hasKo(req) ? ' (the request is written in Korean)' : ''}: ${req}`,
     refs.length && refs.map((r, k) => `Image ${k + 2} is ` + (r.role === 'style' ? 'the painting style and character reference: keep characters identical to it.' : `the reference sheet for "${r.c.id}": keep it identical to the sheet.`)).join('\n'),
     b.scale && `SIZE AND SCALE: ${b.scale}`,
     RULES
