@@ -53,6 +53,11 @@ textarea.essay{min-height:200px;font-family:var(--serif)}
 .hint{font-size:.78rem;color:var(--ink-3);margin:6px 0 0}
 .how{font-size:.8rem;color:var(--ink-2);background:var(--paper-3);border-radius:6px;padding:10px 12px;margin:12px 0 0}
 .how ol{margin:4px 0 0;padding-left:18px}
+.how .howTo{margin:6px 0 2px;color:var(--ink)}
+.how .howTo b{color:var(--shu)}
+.how .chips{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0 8px}
+.how .chip{background:var(--paper-2);border:1px solid var(--line-2);border-radius:999px;padding:5px 11px;font-size:.8rem;min-height:32px}
+.how .chip:active{background:var(--ink);color:var(--paper)}
 .check{font-size:.8rem;margin-top:10px;padding:8px 12px;border-radius:6px;background:var(--paper-3);color:var(--ink-2)}
 .check.bad{color:var(--shu)}
 .seg{display:flex;border:1px solid var(--line-2);border-radius:999px;overflow:hidden;margin-bottom:10px}
@@ -76,6 +81,7 @@ textarea.essay{min-height:200px;font-family:var(--serif)}
 /* 줄 카드 */
 .line{background:var(--paper-2);border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin-top:10px}
 .line.para{margin-top:22px}
+.line.on{border-color:var(--shu)}
 .line .top{display:flex;align-items:center;gap:8px}
 .line .no{font-size:.72rem;color:var(--ink-3);min-width:22px}
 .line .st{font-size:.72rem;margin-left:auto;color:var(--ink-3)}
@@ -233,10 +239,16 @@ dialog h3{font-family:var(--serif);font-weight:400;margin:0 0 6px}
     <p class="hint">따로 만든 조각은 매번 목소리가 조금씩 달라집니다. 한 번에 길게 읽힐수록 한 사람 목소리로 이어집니다.</p>
     <details class="how">
       <summary>말투 넣는 요령</summary>
+      <p class="howTo" id="howTo">아래 조각의 글 칸을 한 번 누른 뒤 버튼을 누르면 그 조각에 들어갑니다.</p>
       <ol>
-        <li>줄마다 아래 칸에서 '따뜻하게', '속삭이듯' 같은 말투를 고릅니다. 직접 적어도 됩니다. 말투를 줄마다 크게 바꾸면 목소리도 달라 보일 수 있으니, 고른 목소리가 중요하면 '전체 말투' 하나만 쓰세요.</li>
-        <li>문장 안에 <b>&lt;short pause&gt;</b>, <b>&lt;long pause&gt;</b> 를 넣으면 그 자리에서 쉽니다. <b>&lt;sigh&gt;</b>(한숨), <b>&lt;breath&gt;</b>(숨) 도 됩니다.</li>
-        <li>힘줄 낱말은 따옴표보다 말투 칸에 "'바다'를 힘주어" 처럼 적는 게 잘 됩니다.</li>
+        <li>줄마다 아래 칸에서 '따뜻하게', '속삭이듯' 같은 말투를 고릅니다. 직접 적어도 됩니다. 말투를 줄마다 크게 바꾸면 목소리도 달라 보일 수 있으니, 고른 목소리가 중요하면 '전체 말투' 하나만 쓰세요.
+          <div class="chips" id="moodChips"></div></li>
+        <li>문장 안에 <b>&lt;short pause&gt;</b>, <b>&lt;long pause&gt;</b> 를 넣으면 그 자리에서 쉽니다. <b>&lt;sigh&gt;</b>(한숨), <b>&lt;breath&gt;</b>(숨) 도 됩니다. 글 칸에서 넣을 자리를 누른 뒤 고르세요 (위 원고 칸에도 됩니다).
+          <div class="chips">
+            <button class="chip" data-tag="<short pause>">짧게 쉼</button><button class="chip" data-tag="<long pause>">길게 쉼</button><button class="chip" data-tag="<sigh>">한숨</button><button class="chip" data-tag="<breath>">숨</button>
+          </div></li>
+        <li>힘줄 낱말은 따옴표보다 말투 칸에 "'바다'를 힘주어" 처럼 적는 게 잘 됩니다. 조각 글에서 낱말을 길게 눌러 고른 뒤 누르세요.
+          <div class="chips"><button class="chip" id="stressChip">고른 낱말 힘주어</button></div></li>
       </ol>
     </details>
     <div id="lines"></div>
@@ -834,7 +846,7 @@ function lineHtml(l, i, ref = refF0()){
       <button class="btn" data-act="pplay" style="min-height:30px;padding:3px 12px">▶ 고친 소리</button>
       ${pp.manual ? '<button class="btn warn" data-act="pauto" style="min-height:30px;padding:3px 8px">자동으로</button>' : `<small>${st.evenPitch ? '자동' : '그대로'}</small>`}`;
   const sp = l.speed || 1, rows = Math.min(10, Math.max(2, Math.ceil(l.text.length / 26) + (l.text.match(/\n/g) || []).length));
-  return `<div class="line ${l.para ? 'para' : ''}" data-id="${l.id}">
+  return `<div class="line ${l.para ? 'para' : ''} ${l.id === howLine ? 'on' : ''}" data-id="${l.id}">
     <div class="top"><span class="no">${i + 1}</span><span class="st ${cls}">${esc(msg || '')}</span></div>
     <textarea class="tx" rows="${rows}" data-f="text">${esc(l.text)}</textarea>
     <div class="opts">
@@ -896,6 +908,59 @@ $('#lines').addEventListener('click', async e => {
   }
   if (b.dataset.act === 'trim'){ dropTakes(l.takes.filter(x => x !== l.pick)); l.takes = [l.pick]; save(); refreshAll(); }
 });
+
+// 말투 넣는 요령의 버튼 → 마지막으로 누른 조각(howLine)·글 칸(howBox)에 바로 넣는다
+let howLine = null, howBox = 'script';
+const lineEl = id => document.querySelector(`.line[data-id="${id}"]`);
+const lineNo = id => st.lines.findIndex(x => x.id === id) + 1;
+function showHowTarget(){
+  const n = howLine && lineNo(howLine);
+  $('#howTo').innerHTML = n ? `<b>${n}번 조각</b>에 넣습니다. 다른 조각은 그 글 칸을 누르세요.` : '아래 조각의 글 칸을 한 번 누른 뒤 버튼을 누르면 그 조각에 들어갑니다.';
+}
+function pickLine(e){
+  const c = e.target.closest('.line'); if (!c) return;
+  if (e.target.dataset.f === 'text') howBox = c.dataset.id;
+  if (howLine === c.dataset.id) return;
+  const old = howLine && lineEl(howLine); if (old) old.classList.remove('on');
+  howLine = c.dataset.id; c.classList.add('on'); showHowTarget();
+}
+['focusin', 'click'].forEach(ev => {
+  $('#lines').addEventListener(ev, pickLine);
+  $('#script').addEventListener(ev, () => { howBox = 'script'; });
+});
+$('#moodChips').innerHTML = MOODS.map(([v, n]) => `<button class="chip" data-mood="${esc(v)}">${v ? n : '말투 빼기'}</button>`).join('');
+// 누를 때 글 칸이 커서·고른 글자를 잃지 않게 (폰에서 자판도 안 닫힘)
+$('.how').addEventListener('pointerdown', e => { if (e.target.closest('.chip')) e.preventDefault(); });
+const fire = el => el.dispatchEvent(new Event('input', {bubbles: true}));
+function needLine(){
+  if (!st.lines.length){ toast('먼저 원고를 나누기 하세요'); return null; }
+  const el = howLine && lineEl(howLine);
+  if (!el){ toast('넣을 조각의 글 칸을 먼저 한 번 누르세요'); return null; }
+  return el;
+}
+$('#moodChips').addEventListener('click', e => {
+  const b = e.target.closest('[data-mood]'); if (!b) return;
+  const el = needLine(); if (!el) return;
+  const sel = el.querySelector('[data-f="mood"]'); sel.value = b.dataset.mood; fire(sel);
+  toast(`${lineNo(howLine)}번 조각 말투: ${b.dataset.mood ? b.textContent : '그대로'}`);
+});
+document.querySelectorAll('.how [data-tag]').forEach(b => b.onclick = () => {
+  const ta = howBox === 'script' ? $('#script') : (lineEl(howBox) || {querySelector: () => null}).querySelector('[data-f="text"]');
+  if (!ta) return toast('넣을 글 칸을 먼저 누르세요');
+  const s = ta.selectionStart, tag = b.dataset.tag, pre = s && !/\s$/.test(ta.value.slice(0, s)) ? ' ' : '';
+  ta.setRangeText(pre + tag + ' ', s, ta.selectionEnd, 'end'); fire(ta);
+  toast(`${howBox === 'script' ? '원고' : lineNo(howBox) + '번 조각'}에 ${b.textContent} 넣었습니다`);
+});
+$('#stressChip').onclick = () => {
+  const el = needLine(); if (!el) return;
+  const ta = el.querySelector('[data-f="text"]'), w = ta.value.slice(ta.selectionStart, ta.selectionEnd).trim();
+  if (!w) return toast('조각 글에서 힘줄 낱말을 길게 눌러 고른 뒤 누르세요');
+  const c = w.charCodeAt(w.length - 1), josa = c >= 0xAC00 && c <= 0xD7A3 && (c - 0xAC00) % 28 ? '을' : '를';
+  const ex = el.querySelector('[data-f="extra"]'), add = `'${w}'${josa} 힘주어`;
+  if (ex.value.includes(add)) return toast('이미 들어 있습니다');
+  ex.value = ex.value.trim() ? ex.value.trim() + ', ' + add : add; fire(ex);
+  toast(`${lineNo(howLine)}번 조각 직접 적기 칸에 "${add}" 넣었습니다`);
+};
 
 /* ---------- ③ 만들기 ---------- */
 const cache = new Map();
