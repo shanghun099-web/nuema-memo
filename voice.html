@@ -793,13 +793,22 @@ function knotScript(){
   const scenes = arr(p.scenes).map(s => arr(s.lines).map(str).filter(Boolean).join('\n')).filter(Boolean);
   return {title: str(p.title), text: scenes.length ? scenes.join('\n\n') : str(p.text), scenes: scenes.length};
 }
+// 가져오면 아래 조각까지 바로 나눈다 (원고만 바뀌고 조각은 예전 글로 남아 헷갈리던 것)
 $('#fromKnot').onclick = () => {
   const k = knotScript();
   if (!k.text) return toast('매듭짓기에 글이 없습니다');
-  const cur = str($('#script').value);
-  if (cur && cur !== k.text && !confirm(`원고 칸의 글을 「${k.title || '제목 없음'}」${k.scenes ? ` 장면 ${k.scenes}개 자막` : ''}으로 바꿀까요?`)) return;
-  $('#script').value = k.text; st.script = k.text; save();
-  toast(`「${k.title || '제목 없음'}」${k.scenes ? ` 장면 ${k.scenes}개` : ''}를 가져왔습니다. 줄 나누기를 누르세요`);
+  const name = `「${k.title || '제목 없음'}」${k.scenes ? ` 장면 ${k.scenes}개` : ''}`;
+  const lines = splitScript(k.text, $('#unit').value);
+  const same = st.lines.length === lines.length && st.lines.every((l, i) => l.text === lines[i].text);
+  if (str($('#script').value) === k.text && same) return toast(`${name}는 이미 가져와 나눠 두었습니다`);
+  const takes = st.lines.flatMap(l => l.takes);
+  const ask = [str($('#script').value) && str($('#script').value) !== k.text && `원고 칸의 글을 ${name}로 바꿉니다.`,
+    st.lines.length && '아래 조각도 새 글로 다시 나눕니다' + (takes.length ? ` (만든 소리 ${takes.length}개는 지워짐)` : '') + '.'].filter(Boolean);
+  if (ask.length && !confirm(ask.join('\n') + '\n계속할까요?')) return;
+  dropTakes(takes);
+  $('#script').value = k.text; st.script = k.text;
+  st.lines = lines; save(); renderLines();
+  toast(`${name}를 가져와 ${lines.length}조각으로 나눴습니다`);
 };
 ['script', 'baseStyle'].forEach(id => $('#' + id).addEventListener('input', e => { st[id] = e.target.value; save(); }));
 $('#pace').onchange = e => { st.pace = e.target.value; save(); };
