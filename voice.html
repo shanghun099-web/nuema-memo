@@ -770,10 +770,24 @@ $('#splitBtn').onclick = async () => {
   save(); renderLines();
   toast(`${st.lines.length}조각으로 나눴습니다`);
 };
+// 매듭짓기에서 지금 열린 작품(nuema_knot_list_v1.cur → nuema_knot_p_<id>)을 가져온다.
+// 장면을 나눴으면 장면 = 문단, 자막 한 줄 = 한 줄. 안 나눴으면 원문 그대로. (예전 한 칸 nuema_knot_v1 은 작품 목록이 없을 때만)
+function knotScript(){
+  const list = store.get('nuema_knot_list_v1', null);
+  const items = list ? arr(list.items) : [];
+  if (!items.length){ const k = store.get('nuema_knot_v1', {}); return {title: str(k.title), text: str(k.text)}; }
+  const id = items.some(x => x.id === list.cur) ? list.cur : items[0].id;
+  const p = store.get('nuema_knot_p_' + id, {});
+  const scenes = arr(p.scenes).map(s => arr(s.lines).map(str).filter(Boolean).join('\n')).filter(Boolean);
+  return {title: str(p.title), text: scenes.length ? scenes.join('\n\n') : str(p.text), scenes: scenes.length};
+}
 $('#fromKnot').onclick = () => {
-  const k = store.get('nuema_knot_v1', {});
-  if (!str(k.text)) return toast('매듭짓기에 글이 없습니다');
-  $('#script').value = k.text; st.script = k.text; save(); toast('매듭짓기 글을 가져왔습니다. 줄 나누기를 누르세요');
+  const k = knotScript();
+  if (!k.text) return toast('매듭짓기에 글이 없습니다');
+  const cur = str($('#script').value);
+  if (cur && cur !== k.text && !confirm(`원고 칸의 글을 「${k.title || '제목 없음'}」${k.scenes ? ` 장면 ${k.scenes}개 자막` : ''}으로 바꿀까요?`)) return;
+  $('#script').value = k.text; st.script = k.text; save();
+  toast(`「${k.title || '제목 없음'}」${k.scenes ? ` 장면 ${k.scenes}개` : ''}를 가져왔습니다. 줄 나누기를 누르세요`);
 };
 ['script', 'baseStyle'].forEach(id => $('#' + id).addEventListener('input', e => { st[id] = e.target.value; save(); }));
 $('#pace').onchange = e => { st.pace = e.target.value; save(); };
