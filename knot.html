@@ -173,7 +173,7 @@ dialog h3{font-family:var(--serif);font-weight:400;margin:0 0 6px}
       <option>3</option><option>4</option><option>5</option><option>6</option><option>7</option><option>8</option><option>10</option>
     </select>
     <div class="row" style="margin-top:12px">
-      <button class="btn main" id="btnSplit">장면 나누고 프롬프트 만들기</button>
+      <button class="btn main" id="btnSplit">장면 나누기</button>
     </div>
     <p class="hint">AI는 글을 고치지 않고 자르기만 합니다. 자막 한 줄 단위로 끊고, 뜻이 바뀌는 곳에서 장면을 나눕니다.</p>
     <div class="row" style="margin-top:8px" id="projResetRow" hidden>
@@ -183,15 +183,16 @@ dialog h3{font-family:var(--serif);font-weight:400;margin:0 0 6px}
 
   <!-- 3. 설정표 + 장면 -->
   <section class="step" id="stepScenes" hidden>
-    <h2><span class="n">3</span>이야기 설정표</h2>
+    <details><summary>작품 설정과 기준 그림</summary>
     <div class="bible" id="bible"></div>
     <div class="row" style="margin-top:6px">
       <button class="btn warn" id="bibleReset">↺ 설정표만 처음부터 다시 만들기</button>
     </div>
     <p class="hint">여기 적힌 영어 문장이 모든 장면 프롬프트에 글자 그대로 들어가 인물·사물·장소가 흔들리지 않게 합니다. 고치면 모든 장면에 바로 반영됩니다.</p>
 
-    <h2 style="margin-top:26px"><span class="n">4</span>장면과 프롬프트</h2>
-    <div class="how">
+    </details>
+    <h2 style="margin-top:26px"><span class="n">4</span>장면 한눈에 보기</h2>
+    <details><summary>그리기 사용법</summary><div class="how">
       <b>🎨 앱에서 바로 그리기 (GPT, 장당 요금)</b>
       <ol>
         <li>먼저 위 설정표에서 인물·사물마다 <b>🎨 설정 그림 만들기</b></li>
@@ -206,6 +207,7 @@ dialog h3{font-family:var(--serif);font-weight:400;margin:0 0 6px}
         <li>받은 그림은 각 장면의 "그림 올리기"로 넣기</li>
       </ol>
     </div>
+    </details>
     <div class="row" style="margin-top:12px">
       <button class="btn main" id="btnDrawAll">🎨 전체 그리기</button>
       <button class="btn" id="btnCopyStart">시작 메시지 복사</button>
@@ -466,6 +468,7 @@ const cardOf = s => document.querySelector(`.scene[data-id="${s.id}"]`);
 // 설정표 만드는 규칙 — 장면 나누기와 "설정표만 다시 만들기"가 같이 쓴다
 const BIBLE_RULES = `[이야기 설정표 bible — 모든 장면에 글자 그대로 반복해서 넣을 문장들]
 - cast: 두 장면 이상 나오는 인물과 중요한 사물. id(영문 소문자), type(사람·동물 같은 등장인물이면 "person", 물건이면 "object"), ko(한국어 이름), ko_desc(한국어 설명 한 줄), en(영어 고정 묘사 1~2문장: 나이·체형·머리·얼굴·옷과 색 / 사물은 재질·색·크기·특징. 장면마다 달라지지 않는 것만. 옷·머리·사물의 주요 색은 색 이름 뒤에 HEX 코드를 붙여, 예: soft blue knit sweater (#5B7FA6). 사람은 마지막 문장에 몸에 지닌 것을 못 박아: 있는 것만 적고 "nothing else", 없으면 "No hat, glasses, jewelry or bag." 한쪽에만 있는 것은 왼쪽·오른쪽까지, 예: a silver watch on the LEFT wrist and nothing else). size(영어 한 줄: 실제 크기 cm + 사람 몸에 빗댄 크기. 예: about 40 cm long and as thin as a pencil, roughly the length of the woman's forearm. 사람은 키와 체형).
+- 이야기 안에서 달라지는 특징은 고정 묘사에 넣지 마. 예를 들어 색은 같고 모양이 변한다면 색은 cast에, 각 시점의 모양은 장면 action에 적어.
 - world: 이야기의 주 무대 (영어 1~2문장: 공간 구조, 재질, 소품, 기본 색) / world_ko: 한국어 한 줄
 - palette: 이야기 전체의 주요 색 4~6개를 영어 한 줄로, 색 이름과 HEX 코드 (예: dusty blue #7C93AE, warm amber #E3A857, ...)
 - scale: 사물끼리의 크기 관계만 영어 1~2문장 (각 사물의 크기는 cast.size 에 따로). 예: The brush fits loosely inside the pipe, and the pipe is as thick as the woman's wrist. / scale_ko: 한국어 한 줄
@@ -473,17 +476,17 @@ const BIBLE_RULES = `[이야기 설정표 bible — 모든 장면에 글자 그�
 function splitPrompt(hasRef){
   const n = proj.count === 'auto' ? '4~7개 (글 흐름에 맞게)' : `정확히 ${proj.count}개`;
   return `너는 수채화 그림책처럼 이어지는 에세이 쇼츠의 장면 연출가야. 아래 산문을 장면으로 나누고, 모든 그림이 한 권의 그림책처럼 이어지도록 그림 설계를 해줘.
-${hasRef ? '\n첨부한 그림은 기준 그림이야. 그림 속 인물이 이 글의 주인공(화자)이야. 인물의 나이·얼굴·머리·옷·색을 이 그림을 보고 정확히 묘사해.\n' : ''}
+${hasRef ? '\n첨부한 그림은 기준 그림이야. 원문에 등장하는 대상만 선택해. 그림체를 참고하고, 같은 인물이 실제로 등장할 때 그 외형을 참고해.\n' : ''}
 [글 자르기]
 1. 원문을 한 글자도 고치거나 빼거나 보태지 마. 순서도 그대로. 자르기만 해.
 2. 자막 한 줄 = 화면에 한 번 나오는 글. 대략 14~30자, 숨 쉬는 자리(쉼표·문장 끝·의미 단위)에서 끊어.
-3. 장면은 ${n}. 시간·장소·감정이 바뀌는 곳에서 나눠. 장면 하나에 그림 하나.
+3. 장면은 ${n}. 글을 끝까지 읽고 마지막에 처음 드러나는 사실·모양·관계를 찾은 뒤 장면을 나눠. 한 그림으로 전달할 수 있는 연속된 문장은 묶고, 행동·관계·사물의 상태가 달라져 새 그림이 필요할 때 나눠. 각 장면에는 그 시점에 보이는 한순간만 그려. 결말을 앞 장면에 미리 보여주지 마.
 
 ${BIBLE_RULES}
 
 [장면마다]
 - lines: 자막 줄 배열
-- ko: 이 그림에 무엇이 보이는지 한국어 한두 문장
+- ko: 이 장면에서 그릴 한순간을 쉬운 한국어 한 줄로. 원문의 행동이나 변화를 눈에 보이게 쓰고 action에도 같은 순간을 담아
 - cast: 이 장면에 보이는 cast id 배열. 반드시 위 bible.cast 의 id 를 글자 그대로만 (새 이름·한국어 이름·별명 금지)
 - same_place: 앞 장면과 같은 장소에서 이어지면 true, 장소가 바뀌면 false. 첫 장면은 true
 - action: 영어. 이 장면에서 보이는 것 — 누가/무엇이 어디서 무엇을 하는지, 표정·자세·손, 소품 위치. 2~3문장. cast 의 생김새는 다시 쓰지 말고 이름(예: the woman, the brush)으로만 가리켜.
@@ -615,6 +618,9 @@ $('#btnSplit').onclick = async () => {
     const {json, used} = await aiJSON(parts);
     const scenes = arr(json.scenes).map(cleanScene).filter(s => s.lines.length).map(s => Object.assign({id: uid()}, s));
     if (!scenes.length) throw new Error('장면을 받지 못했습니다');
+    if (norm(scenes.flatMap(s => s.lines).join('')) !== norm(proj.text)){
+      throw new Error('나눈 장면에서 원문이 빠지거나 바뀌었습니다. 장면 나누기를 다시 눌러 주세요.');
+    }
     await clearScenes();
     proj.bible = cleanBible(json.bible);
     scenes.forEach(s => s.cast = fixCast(s.cast, proj.bible));
@@ -625,7 +631,7 @@ $('#btnSplit').onclick = async () => {
     else toast(`${scenes.length}개 장면으로 나눴습니다 (${used})`);
     showErr($('#stepText'), '');
   }catch(e){ toast('실패 — ' + (e.message || e)); showErr($('#stepText'), e.message || String(e)); }
-  b.disabled = false; b.textContent = '장면 나누고 프롬프트 만들기';
+  b.disabled = false; b.textContent = '장면 나누기';
 };
 
 /* 한 장면만 다시 설계 (요청 문장이 있으면 반영) */
@@ -642,6 +648,8 @@ ${request ? `\n작가의 요청: ${request}\n` : ''}
 앞 장면의 유지 상태(keep): ${prev ? JSON.stringify(prev.keep || '') : '(없음)'}
 지금 설계: ${JSON.stringify({ko: s.ko, cast: s.cast, action: s.action, shot: s.shot, layout: s.layout, layout_ko: s.layout_ko, light: s.light, link: s.link, keep: s.keep, same_place: s.same_place})}
 
+작품 원문 전체(앞뒤 흐름 참고): ${proj.text}
+이 장면의 자막에 해당하는 한순간만 그리고 결말의 변화를 앞당기지 마. ko와 action은 같은 순간을 묘사해.
 규칙: action/shot/light/link/keep 은 영어, ko 는 한국어. cast 는 설정표 cast 의 id 를 글자 그대로만. action 에서 cast 생김새는 다시 쓰지 말고 이름으로만. shot 은 앞뒤 장면과 겹치지 않게. layout 은 영어로 어느 쪽에서 보는지와 화면 속 자리·방향을 구체적으로, layout_ko 는 그걸 한국어 한 줄로 (작가가 위치를 요청하면 꼭 반영). keep 은 앞 장면까지 이야기로 바뀌어 이 장면에서도 유지돼야 하는 상태(없으면 빈 문자열). same_place 는 앞 장면과 같은 장소면 true, 장소가 바뀌면 false. 그림 속에 글자는 없게.
 JSON으로만: {"ko":"","cast":[""],"action":"","shot":"","layout":"","layout_ko":"","light":"","link":"","keep":"","same_place":true}`;
   try{
@@ -676,7 +684,7 @@ function castLines(ids, sheetIds = []){
   const b = proj.bible || {cast: []};
   const list = ids ? b.cast.filter(c => ids.includes(c.id)) : b.cast;
   return list.map(c => sheetIds.includes(c.id)
-    ? `- "${c.id}": ${firstSentence(c.en)} Draw it exactly like its reference sheet.${c.size ? ` Size: ${c.size}` : ''}`
+    ? `- "${c.id}": ${firstSentence(c.en)} Use its reference sheet for identity; follow THIS SCENE for its current state.${c.size ? ` Size: ${c.size}` : ''}`
     : `- ${c.en}${c.size ? ` Size: ${c.size}` : ''}`).join('\n');
 }
 /* 사물마다 크기(cast.size)가 있으면 각 인물·사물 줄에 붙으므로, 전체 크기 기준은 짧을 때만 관계로 덧붙인다
@@ -705,7 +713,7 @@ function refsLine(refs){
   if (!refs.length) return '';
   return 'ATTACHED IMAGES:\n' + refs.map((r, k) => `- Image ${k + 1}: ` + (
     r.role === 'style' ? 'painting style reference. Match its painting style. If a person in it is one of this scene\'s characters, keep them visually identical; do not add anyone from it who is not in this scene.'
-    : r.role === 'cast' ? `reference sheet for "${r.c.id}". Draw it exactly like this sheet: same shape, colors, proportions and details. The sheet shows how it looks, not the camera angle: place and turn it as this scene's LAYOUT says.`
+    : r.role === 'cast' ? `reference sheet for "${r.c.id}". Match its identifying details. Follow THIS SCENE for changes such as shape, damage, growth or appearance; the sheet shows its reference state. The sheet shows how it looks, not the camera angle: place and turn it as this scene's LAYOUT says.`
     : r.role === 'layout' ? 'rough composition sketch drawn by the author. Follow it for the camera viewpoint, framing and where each thing is placed and which way it faces. Ignore its rough lines, colors and blank background, and paint everything in the style described.'
     : 'the previous illustration of this story. Use it only for continuity of place, props and colors. Do not copy its composition or camera angle.'
   )).join('\n');
@@ -720,7 +728,7 @@ function scenePrompt(s, mode){
     s.shot && `CAMERA: ${s.shot}`,
     layoutLine(s),
     s.light && `LIGHT: ${s.light}`,
-    cast && `CHARACTERS AND OBJECTS (identical in every illustration):\n${cast}\n${ONLY_WORN}`,
+    cast && `CHARACTERS AND OBJECTS (recurring identities; apply changes described in THIS SCENE):\n${cast}\n${ONLY_WORN}`,
     b.world && `SETTING: ${b.world}`,
     scaleLine(s.cast),
     b.palette && `PALETTE: ${b.palette}`,
@@ -738,7 +746,7 @@ function startMessage(){
     `I'm going to ask you for ${n} illustrations for one short story, one at a time, in this chat. Together they must look like pages of one picture book: the same painting style, the same characters, the same world.`,
     'Image 1 (attached) is the reference image: it defines the character design and painting style for every illustration.',
     `STYLE: ${curStyle().text.trim()}`,
-    cast && `CHARACTERS AND OBJECTS (keep exactly like this in every illustration):\n${cast}\n${ONLY_WORN}`,
+    cast && `CHARACTERS AND OBJECTS (retain identity as their story states evolve):\n${cast}\n${ONLY_WORN}`,
     b.world && `SETTING: ${b.world}`,
     b.scale && `SIZE AND SCALE (keep the same in every illustration): ${b.scale}`,
     b.palette && `PALETTE: ${b.palette}`,
@@ -846,14 +854,20 @@ function renderScenes(){
     <div class="scene" data-id="${s.id}">
       <div class="top">
         <span class="no">장면 ${pad(i + 1)}<small>${s.lines.length}줄</small>${i > 0 && s.same_place === false ? '<small class="placechg">📍 장소 바뀜</small>' : ''}</span>
+
+      </div>
+      <textarea class="lines" data-f="lines" aria-label="자막 줄 (한 줄에 하나)">${esc(s.lines.join('\n'))}</textarea>
+      ${s.ko ? `<p class="desc"><b>그릴 장면</b>${esc(s.ko)}${s.cast.length ? ` <span style="color:var(--ink-3)">· ${s.cast.map(castName).map(esc).join(', ')}</span>` : ''}</p>` : '<p class="desc">아직 이 장면의 그림 설계가 없습니다. 아래 "다시 만들기"를 누르세요.</p>'}
+      <div class="pic">
+        <div class="img" data-act="view">그림<br>없음</div>
+        <button class="btn main" data-act="draw">🎨 그리기</button>
+      </div>
+      <details><summary>자세히 고치기</summary>
         <span class="tools">
           ${i > 0 ? '<button data-act="merge">↑ 합치기</button>' : ''}
           <button data-act="cut" title="자막 칸에서 커서가 있는 줄부터 새 장면으로">여기서 나누기</button>
           <button data-act="del">삭제</button>
         </span>
-      </div>
-      <textarea class="lines" data-f="lines" aria-label="자막 줄 (한 줄에 하나)">${esc(s.lines.join('\n'))}</textarea>
-      ${s.ko ? `<p class="desc"><b>그림</b>${esc(s.ko)}${s.cast.length ? ` <span style="color:var(--ink-3)">· ${s.cast.map(castName).map(esc).join(', ')}</span>` : ''}</p>` : '<p class="desc">아직 이 장면의 그림 설계가 없습니다. 아래 "다시 만들기"를 누르세요.</p>'}
       <label class="f">📐 위치 — 어느 쪽에서 보는지, 무엇이 화면 어디에 (고치면 그대로 그림에 들어가요 · 한국어·영어 모두 돼요)</label>
       <input type="text" data-f="layout_ko" value="${esc(s.layout_ko || '')}" placeholder="예: 위에서 내려다봄. 종이는 정면으로 평평하게 가운데, 오른손이 연필 끝을 아래 줄에">
       <div class="sketch">
@@ -865,7 +879,7 @@ function renderScenes(){
       </div>
       <pre class="prompt" data-prompt>${esc(scenePrompt(s))}</pre>
       <div class="row" style="margin-top:8px">
-        <button class="btn main" data-act="draw">🎨 그리기</button>
+
         <button class="btn" data-act="copy">프롬프트 복사</button>
         <button class="btn" data-act="chatgpt">ChatGPT로</button>
       </div>
@@ -890,13 +904,12 @@ function renderScenes(){
         ${i > 0 ? `<label class="f">앞 장면과 이어짐 (link)</label><input type="text" data-f="link" value="${esc(s.link)}">
         <label class="f samep"><input type="checkbox" data-f="same_place"${s.same_place === false ? '' : ' checked'}> 앞 장면과 같은 장소 (끄면 '자동'일 때 앞 장면 그림을 보내지 않아요)</label>` : ''}
       </details>
-      <div class="pic">
-        <div class="img" data-act="view">그림<br>없음</div>
-        <label class="btn">그림 올리기<input type="file" accept="image/*" data-act="upload" hidden></label>
+      <div class="row">        <label class="btn">그림 올리기<input type="file" accept="image/*" data-act="upload" hidden></label>
         <button class="btn" data-act="down">받기</button>
         <button class="btn" data-act="undo" title="그리기·고치기 바로 전 그림으로">↩ 전 그림</button>
       </div>
       <button class="link" data-act="scaleimg" style="margin-top:6px">📏 이 그림으로 크기 기준 잡기${i === 0 ? ' (장면 01은 올리면 자동)' : ''}</button>
+      </details>
     </div>`).join('');
   proj.scenes.forEach(s => { showSceneImg(s.id); showSketch(s.id); });
   renderCheck(); renderExport();
@@ -1309,7 +1322,7 @@ async function fixScene(s, req){
     'Edit Image 1, an illustration from a picture book.',
     'Keep the characters, their faces and clothes, the composition, the colors and the painting style exactly the same.',
     `Change only this${hasKo(req) ? ' (the request is written in Korean)' : ''}: ${req}`,
-    refs.length && refs.map((r, k) => `Image ${k + 2} is ` + (r.role === 'style' ? 'the painting style and character reference: keep characters identical to it.' : `the reference sheet for "${r.c.id}": keep it identical to the sheet.`)).join('\n'),
+    refs.length && refs.map((r, k) => `Image ${k + 2} is ` + (r.role === 'style' ? 'the painting style and character reference: keep characters identical to it.' : `the reference sheet for "${r.c.id}": use it for identity and follow the requested change for the current state.`)).join('\n'),
     b.scale && `SIZE AND SCALE: ${b.scale}`,
     RULES
   ].filter(Boolean).join('\n\n');
@@ -1533,7 +1546,7 @@ $('#projReset').onclick = async () => {
 function biblePrompt(hasRef){
   const list = proj.scenes.map((s, i) => ({no: i + 1, lines: s.lines, ko: s.ko, action: s.action}));
   return `너는 수채화 그림책처럼 이어지는 에세이 쇼츠의 장면 연출가야. 이 글은 이미 장면으로 나눠져 있어. 장면은 그대로 두고, 이야기 설정표(bible)만 처음부터 새로 만들어줘. 예전 설정표는 잊고 글과 장면만 보고 새로 정해.
-${hasRef ? '\n첨부한 그림은 기준 그림이야. 그림 속 인물이 이 글의 주인공(화자)이야. 인물의 나이·얼굴·머리·옷·색을 이 그림을 보고 정확히 묘사해.\n' : ''}
+${hasRef ? '\n첨부한 그림은 기준 그림이야. 원문에 등장하는 대상만 선택해. 그림체를 참고하고, 같은 인물이 실제로 등장할 때 그 외형을 참고해.\n' : ''}
 ${BIBLE_RULES}
 
 [장면마다 나오는 인물·사물]
