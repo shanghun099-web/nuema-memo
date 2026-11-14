@@ -55,6 +55,8 @@
       const cached = (u.prompt_tokens_details && u.prompt_tokens_details.cached_tokens) || 0;
       add(where, (((u.prompt_tokens || 0) - cached) * pin + cached * pcache + (u.completion_tokens || 0) * pout) / 1e6 * KRW, true);
     },
+    // 사용량이 응답에 따로 안 오는 것(대화로 그림 고치기의 그림 몫)은 품질별 어림값(원)으로
+    addWon(where, won, gpt){ add(where, won, gpt); },
     month(key){ const m = load()[key || month()] || {}; return {memo: m.memo || 0, knot: m.knot || 0, voice: m.voice || 0, gpt: m.gpt || 0, n: m.n || 0, total: (m.memo || 0) + (m.knot || 0) + (m.voice || 0)}; },
     lastMonthKey(){ const d = new Date(); d.setDate(1); d.setMonth(d.getMonth() - 1); return month(d); },
     won: n => n < 10 && n > 0 ? n.toFixed(1) : Math.round(n).toLocaleString(),

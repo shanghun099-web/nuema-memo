@@ -80,8 +80,8 @@ pre.prompt{background:var(--paper-3);border-radius:6px;padding:10px 12px;font-si
 .scene summary{font-size:.8rem;color:var(--ink-2);cursor:pointer}
 .scene .ask{margin-top:10px}
 .busy{opacity:.55;pointer-events:none}
-.pic{display:flex;gap:10px;align-items:center;margin-top:12px}
-.pic .img{width:64px;height:64px;border-radius:6px;border:1px solid var(--line);background:var(--paper-3) center/cover no-repeat;display:grid;place-items:center;font-size:.66rem;color:var(--ink-3);text-align:center;cursor:pointer;flex:none}
+.pic{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:12px}
+.pic .img{width:120px;height:120px;border-radius:6px;border:1px solid var(--line);background:var(--paper-3) center/cover no-repeat;display:grid;place-items:center;font-size:.66rem;color:var(--ink-3);text-align:center;cursor:pointer;flex:none}
 
 .empty{padding:22px 0;color:var(--ink-3);font-size:.88rem;text-align:center}
 .check{font-size:.8rem;margin-top:10px;padding:8px 12px;border-radius:6px;background:var(--paper-3);color:var(--ink-2)}
@@ -116,6 +116,29 @@ dialog h3{font-family:var(--serif);font-weight:400;margin:0 0 6px}
 .undo{position:fixed;left:50%;bottom:calc(72px + env(safe-area-inset-bottom));transform:translateX(-50%);background:var(--ink);color:var(--paper);padding:6px 6px 6px 16px;border-radius:999px;font-size:.84rem;display:flex;gap:10px;align-items:center;max-width:calc(100vw - 32px);z-index:11}
 .undo[hidden],.row[hidden]{display:none}
 .undo span{white-space:nowrap}
+/* 그림 내력 · 후보 · 대화 · 검사 */
+.hist{margin-top:8px}
+.hist .hrow{display:flex;gap:6px;overflow-x:auto;padding-bottom:4px}
+.hist .h{flex:none;width:54px;text-align:center;font-size:.62rem;color:var(--ink-3);background:none;border:none;padding:0;cursor:pointer}
+.hist .h i{display:block;width:54px;height:54px;border-radius:6px;border:2px solid transparent;background:var(--paper-3) center/cover no-repeat;margin-bottom:2px}
+.hist .h.on i{border-color:var(--shu)}
+.hist .h.on{color:var(--shu);font-weight:600}
+.cands{margin-top:10px;padding:10px;border-radius:8px;background:var(--paper-3);font-size:.84rem}
+.cands .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:8px;margin-top:8px}
+.cands .c i{display:block;aspect-ratio:1/1;border-radius:6px;background:#fff center/cover no-repeat;cursor:pointer}
+.cands .c .row{gap:4px;margin-top:4px}
+.cands .c .btn{padding:4px 8px;font-size:.74rem}
+.chatlog{font-size:.8rem;color:var(--ink-2);background:var(--paper-3);border-radius:6px;padding:8px 10px;margin-top:8px}
+.chatlog ol{margin:2px 0 0;padding-left:20px}
+.qc{font-size:.82rem;border-radius:6px;padding:8px 10px;margin-top:10px}
+.qc.ok{background:#E8F0E3;color:#3D5A2E}
+.qc.bad{background:#FBE9E4;color:#8A2E1B}
+.qc.wait{background:var(--paper-3);color:var(--ink-2)}
+.qc ul{margin:4px 0 0;padding-left:18px}
+.qc li{margin-top:6px}
+.qc .btn{padding:3px 10px;font-size:.74rem;margin-left:4px}
+#mkCanvas{display:block;width:100%;height:auto;border-radius:6px;touch-action:none;margin-top:8px;background:#fff;border:1px solid var(--line-2)}
+#pkImg{display:block;width:100%;border-radius:6px}
 .undo .btn{background:var(--paper);color:var(--ink);border-color:var(--paper);padding:5px 12px}
 </style>
 </head>
@@ -195,10 +218,10 @@ dialog h3{font-family:var(--serif);font-weight:400;margin:0 0 6px}
     <details><summary>그리기 사용법</summary><div class="how">
       <b>🎨 앱에서 바로 그리기 (GPT, 장당 요금)</b>
       <ol>
-        <li>먼저 위 설정표에서 인물·사물마다 <b>🎨 설정 그림 만들기</b></li>
-        <li>장면마다 <b>🎨 그리기</b>, 또는 아래 <b>🎨 전체 그리기</b>로 01부터 차례로</li>
-        <li>그림체 기준 그림 + 그 장면에 나오는 인물·사물의 설정 그림을 같이 보내서 모양이 이어집니다</li>
-        <li>80% 마음에 들면 다시 그리지 말고 <b>GPT로 고치기</b>. 마음에 안 들면 <b>↩ 전 그림</b>으로 되돌리기</li>
+        <li>먼저 위 설정표에서 인물·사물마다 <b>🎨 설정 그림 만들기</b> (말하고 느끼는 사물은 종류를 <b>의인화</b>로)</li>
+        <li>구도가 걱정되면 <b>🎲 후보</b>로 싼 초안 여러 장 → 마음에 드는 것에 <b>✨ 좋게</b>. 바로 그리려면 <b>🎨 그리기</b></li>
+        <li>80% 마음에 들면 다시 그리지 말고 <b>💬 GPT로 고치기</b> — 대화처럼 이어서 고쳐요 ("조금 더 왼쪽", "아까보다 작게"). 한 곳만 바꾸려면 <b>🖌 칠한 곳만</b></li>
+        <li>그릴 때마다 <b>🔍 AI가 검사</b>해서 틀린 곳을 카드에 남겨요. 그렸던 그림은 전부 남아서 아래 줄에서 다시 고를 수 있어요</li>
       </ol>
       <b style="display:block;margin-top:8px">ChatGPT·Gemini 앱에서 그리기 (구독, 추가 요금 없음)</b>
       <ol>
@@ -263,6 +286,8 @@ dialog h3{font-family:var(--serif);font-weight:400;margin:0 0 6px}
   <select id="cfgImgModel">
     <option value="gpt-image-2.5-flare">GPT Image 2.5 Flare — 빠름 (추천)</option>
     <option value="gpt-image-2.5-sunburst">GPT Image 2.5 Sunburst — 고치기가 더 정확</option>
+    <option value="gpt-image-2.6-flare">GPT Image 2.6 Flare — 새로 나옴, 빠름</option>
+    <option value="gpt-image-2.6-sunburst">GPT Image 2.6 Sunburst — 새로 나옴, 고치기가 더 정확</option>
   </select>
   <label class="f" for="cfgImgQuality">그림 품질 (1장 요금은 대략)</label>
   <select id="cfgImgQuality">
@@ -270,6 +295,12 @@ dialog h3{font-family:var(--serif);font-weight:400;margin:0 0 6px}
     <option value="medium">보통 — 약 65원 (추천)</option>
     <option value="high">높음 — 약 200원, 영상에 쓸 최종본</option>
   </select>
+  <label class="f" for="cfgCandN">🎲 후보 장수</label>
+  <select id="cfgCandN"><option value="2">2장</option><option value="3">3장 (추천)</option><option value="4">4장</option></select>
+  <label class="f" for="cfgCandQ">후보 품질 — 구도만 고르는 초안이라 싸게</label>
+  <select id="cfgCandQ"><option value="low">낮음 — 장당 약 25원 (추천)</option><option value="medium">보통 — 장당 약 65원</option></select>
+  <label class="f" for="cfgAutoCheck">그린 뒤 🔍 AI 자동 검사</label>
+  <select id="cfgAutoCheck"><option value="on">켬 — 한 번에 몇 원 (추천)</option><option value="off">끔 — 🔍 검사를 누를 때만</option></select>
 
   <h3 style="margin-top:18px;font-size:.95rem">Gemini</h3>
   <label class="f" for="cfgKey">Gemini API 키 — 누에마 메모와 같이 씀</label>
@@ -313,6 +344,35 @@ dialog h3{font-family:var(--serif);font-weight:400;margin:0 0 6px}
     <button class="btn" id="skCancel">그만두기</button>
     <button class="btn main" id="skSave">저장</button>
   </div>
+</dialog>
+
+<dialog id="dlgMask">
+  <h3>칠한 곳만 고치기 <span id="mkNo" style="font-size:.85rem;color:var(--ink-3)"></span></h3>
+  <p class="hint" style="margin-top:0">고칠 곳을 손가락으로 <b>넉넉히</b> 칠하세요. 칠하지 않은 곳은 그대로 둡니다. (칠한 모양을 아주 정확히 따르지는 않아요)</p>
+  <canvas id="mkCanvas" width="1024" height="1024" aria-label="고칠 곳 칠하는 곳"></canvas>
+  <div class="row" style="margin-top:8px">
+    <button class="btn" id="mkUndo">↶ 한 획 지우기</button>
+    <button class="btn" id="mkClear">모두 지우기</button>
+    <select id="mkSize" style="width:auto;flex:none" aria-label="붓 굵기"><option value="0.04">가는 붓</option><option value="0.08" selected>보통 붓</option><option value="0.15">굵은 붓</option></select>
+  </div>
+  <label class="f" for="mkReq">칠한 곳을 어떻게 바꿀까요?</label>
+  <input type="text" id="mkReq" placeholder="예: 네모의 눈을 웃는 눈으로, 여기 있는 사람을 지워 줘">
+  <div class="row" style="margin-top:12px;justify-content:flex-end">
+    <button class="btn" id="mkCancel">그만두기</button>
+    <button class="btn main" id="mkGo">🖌 칠한 곳만 고치기</button>
+  </div>
+</dialog>
+
+<dialog id="dlgPick">
+  <img id="pkImg" alt="">
+  <p class="hint" id="pkInfo"></p>
+  <div class="row" style="margin-top:10px">
+    <button class="btn main" id="pkUse">이 그림 쓰기</button>
+    <button class="btn ai" id="pkHq">✨ 이 구도로 좋은 품질로</button>
+    <button class="btn" id="pkDown">받기</button>
+    <button class="btn warn" id="pkDel">내력에서 지우기</button>
+  </div>
+  <div class="row" style="margin-top:10px;justify-content:flex-end"><button class="btn" id="pkClose">닫기</button></div>
 </dialog>
 
 <dialog id="dlgReset">
@@ -392,7 +452,8 @@ const refKey = () => 'ref:' + curStyle().id;
 const memoCfg = () => store.get('nuema_cfg_v1', {});
 const apiKey = () => str(memoCfg().key);
 // 매듭짓기만의 AI 설정: 글은 GPT·Gemini 중 고르고, 그림 바로 그리기는 GPT 로
-const knotCfg = () => Object.assign({ai: 'gpt', gptKey: '', gptModel: 'gpt-6.1-sol', imgModel: 'gpt-image-2.5-flare', imgQuality: 'medium'}, store.get('nuema_knot_cfg_v1', {}));
+const knotCfg = () => Object.assign({ai: 'gpt', gptKey: '', gptModel: 'gpt-6.1-sol', imgModel: 'gpt-image-2.5-flare', imgQuality: 'medium',
+  candN: 3, candQuality: 'low', autoCheck: true}, store.get('nuema_knot_cfg_v1', {}));
 const gptKey = () => str(knotCfg().gptKey);
 const aiName = () => knotCfg().ai === 'gpt' ? 'GPT' : 'Gemini';
 const aiKey = () => knotCfg().ai === 'gpt' ? gptKey() : apiKey();
@@ -467,7 +528,7 @@ const cardOf = s => document.querySelector(`.scene[data-id="${s.id}"]`);
 /* ---------- AI: 장면 나누기 + 설정표 ---------- */
 // 설정표 만드는 규칙 — 장면 나누기와 "설정표만 다시 만들기"가 같이 쓴다
 const BIBLE_RULES = `[이야기 설정표 bible — 모든 장면에 글자 그대로 반복해서 넣을 문장들]
-- cast: 두 장면 이상 나오는 인물과 중요한 사물. id(영문 소문자), type(사람·동물 같은 등장인물이면 "person", 물건이면 "object"), ko(한국어 이름), ko_desc(한국어 설명 한 줄), en(영어 고정 묘사 1~2문장: 나이·체형·머리·얼굴·옷과 색 / 사물은 재질·색·크기·특징. 장면마다 달라지지 않는 것만. 옷·머리·사물의 주요 색은 색 이름 뒤에 HEX 코드를 붙여, 예: soft blue knit sweater (#5B7FA6). 사람은 마지막 문장에 몸에 지닌 것을 못 박아: 있는 것만 적고 "nothing else", 없으면 "No hat, glasses, jewelry or bag." 한쪽에만 있는 것은 왼쪽·오른쪽까지, 예: a silver watch on the LEFT wrist and nothing else). size(영어 한 줄: 실제 크기 cm + 사람 몸에 빗댄 크기. 예: about 40 cm long and as thin as a pencil, roughly the length of the woman's forearm. 사람은 키와 체형).
+- cast: 두 장면 이상 나오는 인물과 중요한 사물. id(영문 소문자), type(사람·동물이면 "person" / 글이 사물을 의인화해서 그 사물이 느끼거나 말하거나 움직이는 등장인물이면 "character" / 그냥 물건이면 "object"), ko(한국어 이름), ko_desc(한국어 설명 한 줄), en(영어 고정 묘사 1~2문장: 나이·체형·머리·얼굴·옷과 색 / 사물은 재질·색·크기·특징 / character 는 사물 모양·재질·색을 그대로 살린 몸 + 얼굴(눈·입의 모양과 자리) + 팔다리가 있으면 그 모양까지, 예: A small square sheet of cream paper (#F3E9D2) that has come to life, with two dot eyes and a tiny curved mouth drawn in pencil near its top edge, and thin pencil-line arms and legs. 장면마다 달라지지 않는 것만. 옷·머리·사물의 주요 색은 색 이름 뒤에 HEX 코드를 붙여, 예: soft blue knit sweater (#5B7FA6). 사람은 마지막 문장에 몸에 지닌 것을 못 박아: 있는 것만 적고 "nothing else", 없으면 "No hat, glasses, jewelry or bag." 한쪽에만 있는 것은 왼쪽·오른쪽까지, 예: a silver watch on the LEFT wrist and nothing else). size(영어 한 줄: 실제 크기 cm + 사람 몸에 빗댄 크기. 예: about 40 cm long and as thin as a pencil, roughly the length of the woman's forearm. 사람은 키와 체형).
 - 이야기 안에서 달라지는 특징은 고정 묘사에 넣지 마. 예를 들어 색은 같고 모양이 변한다면 색은 cast에, 각 시점의 모양은 장면 action에 적어.
 - world: 이야기의 주 무대 (영어 1~2문장: 공간 구조, 재질, 소품, 기본 색) / world_ko: 한국어 한 줄
 - palette: 이야기 전체의 주요 색 4~6개를 영어 한 줄로, 색 이름과 HEX 코드 (예: dusty blue #7C93AE, warm amber #E3A857, ...)
@@ -497,6 +558,7 @@ ${BIBLE_RULES}
 - link: 영어 한 문장. 앞 장면과 어떻게 이어지는지 (같은 장소 다른 각도, 시간이 흘러, 같은 물건이 다시 등장 등). 첫 장면은 빈 문자열.
 - keep: 영어. 앞 장면들에서 이야기로 바뀌어 이 장면에도 그대로 유지돼야 하는 상태 (예: The pipe under the sink is already disassembled and lies on the floor. / The brush is stuck inside the pipe). 없으면 빈 문자열.
 - 감정은 과장된 표정보다 빛·공간·사물로. 그림 속에 글자는 없게.
+- 단, type 이 character(의인화된 사물)인 cast 가 나오는 장면은 action 에 그 사물의 표정과 몸짓(눈·입·팔·기울기)을 구체적으로 적어. 의인화 이야기에서는 그 사물이 주인공이야.
 
 JSON으로만 답해:
 {"bible":{"cast":[{"id":"","type":"person","ko":"","ko_desc":"","en":"","size":""}],"world":"","world_ko":"","palette":"","scale":"","scale_ko":"","arc":"","arc_ko":""},
@@ -529,6 +591,7 @@ const cleanScene = s => Object.assign({
 }, boolOr(s.same_place) === undefined ? {} : {same_place: boolOr(s.same_place)});
 /* 사람인지 사물인지: AI가 적은 type 이 있으면 그대로, 예전 작품은 영어 설명에 사람을 가리키는 말이 있는지로 짐작한다.
    틀리면 설정표의 "인물/사물" 칸에서 바꾼다 */
+const isChar = c => c.type === 'character';   // 의인화된 사물 — 얼굴·표정이 있는 등장인물
 function isPerson(c){
   if (c.type) return c.type === 'person';
   return /\b(man|woman|men|women|girl|boy|child|kid|person|lady|gentleman|grandmother|grandfather|grandma|grandpa|mother|father|mom|dad|he|she|his|her)\b/i.test(c.en || '');
@@ -546,7 +609,7 @@ function fixCast(ids, bible){
 }
 const cleanBible = b => ({
   cast: arr(b && b.cast).map(c => Object.assign({id: str(c.id) || uid(), ko: str(c.ko), ko_desc: str(c.ko_desc), en: str(c.en), size: str(c.size)},
-    c.type === 'person' || c.type === 'object' ? {type: c.type} : {})).filter(c => c.en),
+    ['person', 'character', 'object'].includes(c.type) ? {type: c.type} : {})).filter(c => c.en),
   world: str(b && b.world), world_ko: str(b && b.world_ko), palette: str(b && b.palette), scale: str(b && b.scale), scale_ko: str(b && b.scale_ko), arc: str(b && b.arc), arc_ko: str(b && b.arc_ko)
 });
 
@@ -683,9 +746,11 @@ const firstSentence = t => { const m = String(t).match(/^.*?[.!?](\s|$)/); retur
 function castLines(ids, sheetIds = []){
   const b = proj.bible || {cast: []};
   const list = ids ? b.cast.filter(c => ids.includes(c.id)) : b.cast;
+  // 의인화된 사물은 "그냥 물건"으로 그려지기 쉬워서, 살아 있는 등장인물이라는 걸 줄마다 못 박는다
+  const alive = c => isChar(c) ? ' It is a living character, not a plain object: keep its face visible and let it act and show feeling through its eyes, mouth and pose.' : '';
   return list.map(c => sheetIds.includes(c.id)
-    ? `- "${c.id}": ${firstSentence(c.en)} Use its reference sheet for identity; follow THIS SCENE for its current state.${c.size ? ` Size: ${c.size}` : ''}`
-    : `- ${c.en}${c.size ? ` Size: ${c.size}` : ''}`).join('\n');
+    ? `- "${c.id}": ${firstSentence(c.en)} Use its reference sheet for identity; follow THIS SCENE for its current state.${alive(c)}${c.size ? ` Size: ${c.size}` : ''}`
+    : `- ${c.en}${alive(c)}${c.size ? ` Size: ${c.size}` : ''}`).join('\n');
 }
 /* 사물마다 크기(cast.size)가 있으면 각 인물·사물 줄에 붙으므로, 전체 크기 기준은 짧을 때만 관계로 덧붙인다
    (예전처럼 긴 크기 글을 통째로 넣으면 그림 AI가 정작 장면 지시를 놓친다) */
@@ -712,7 +777,8 @@ function refLine(i, mode){
 function refsLine(refs){
   if (!refs.length) return '';
   return 'ATTACHED IMAGES:\n' + refs.map((r, k) => `- Image ${k + 1}: ` + (
-    r.role === 'style' ? 'painting style reference. Match its painting style. If a person in it is one of this scene\'s characters, keep them visually identical; do not add anyone from it who is not in this scene.'
+    r.role === 'draft' ? 'the chosen rough draft of THIS illustration. Keep its composition, camera viewpoint, positions, poses and which way everything faces exactly, and repaint it cleanly with full detail and finish.'
+    : r.role === 'style' ? 'painting style reference. Match its painting style. If a person in it is one of this scene\'s characters, keep them visually identical; do not add anyone from it who is not in this scene.'
     : r.role === 'cast' ? `reference sheet for "${r.c.id}". Match its identifying details. Follow THIS SCENE for changes such as shape, damage, growth or appearance; the sheet shows its reference state. The sheet shows how it looks, not the camera angle: place and turn it as this scene's LAYOUT says.`
     : r.role === 'layout' ? 'rough composition sketch drawn by the author. Follow it for the camera viewpoint, framing and where each thing is placed and which way it faces. Ignore its rough lines, colors and blank background, and paint everything in the style described.'
     : 'the previous illustration of this story. Use it only for continuity of place, props and colors. Do not copy its composition or camera angle.'
@@ -794,7 +860,7 @@ function renderBible(){
     ${b.cast.map((c, k) => `<div class="cast-item">
         <div class="name">${esc(c.ko || c.id)}
           <select class="kind" data-b="type" data-k="${k}" aria-label="${esc(c.ko || c.id)} 인물인지 사물인지">
-            <option value="person"${isPerson(c) ? ' selected' : ''}>인물</option><option value="object"${isPerson(c) ? '' : ' selected'}>사물</option>
+            <option value="person"${isPerson(c) ? ' selected' : ''}>인물</option><option value="character"${isChar(c) ? ' selected' : ''}>의인화 (얼굴 있는 사물)</option><option value="object"${!isPerson(c) && !isChar(c) ? ' selected' : ''}>사물</option>
           </select></div>
         <div class="ko">${esc(c.ko_desc)}</div>
         <textarea class="en" data-b="cast" data-k="${k}" aria-label="${esc(c.ko)} 영어 묘사">${esc(c.en)}</textarea>
@@ -861,7 +927,18 @@ function renderScenes(){
       <div class="pic">
         <div class="img" data-act="view">그림<br>없음</div>
         <button class="btn main" data-act="draw">🎨 그리기</button>
+        <button class="btn" data-act="cands">🎲 후보 ${+knotCfg().candN || 3}장</button>
       </div>
+      <div data-qc></div>
+      <div data-cands></div>
+      <label class="f">받은 그림 고치기 — 다시 그리지 말고 바꿀 것만. 대화처럼 이어서 말하면 앞에서 한 말을 기억해요</label>
+      <div class="row">
+        <input type="text" data-edit placeholder="예: 컵을 왼쪽으로, 창밖을 더 밝게" aria-label="그림에서 바꿀 것" style="flex-basis:100%">
+        <button class="btn main" data-act="fix">💬 GPT로 고치기</button>
+        <button class="btn" data-act="mask">🖌 칠한 곳만</button>
+      </div>
+      <div data-chat></div>
+      <div class="hist" data-hist></div>
       <details><summary>자세히 고치기</summary>
         <span class="tools">
           ${i > 0 ? '<button data-act="merge">↑ 합치기</button>' : ''}
@@ -888,11 +965,8 @@ function renderScenes(){
         <input type="text" data-ask placeholder="예: 더 가까이, 저녁 빛으로" aria-label="프롬프트 고칠 점">
         <button class="btn ai" data-act="redo">프롬프트 다시 만들기</button>
       </div>
-      <label class="f">받은 그림 조금 고치기 — 다시 그리지 말고 바꿀 것만 (앱에서 바로, 또는 그림 받은 대화에 붙일 문장 복사)</label>
-      <div class="row">
-        <input type="text" data-edit placeholder="예: 컵을 왼쪽으로, 창밖을 더 밝게" aria-label="그림에서 바꿀 것" style="flex-basis:100%">
-        <button class="btn main" data-act="fix">🎨 GPT로 고치기</button>
-        <button class="btn ai" data-act="edit">수정 문장 복사</button>
+      <div class="row" style="margin-top:8px">
+        <button class="btn ai" data-act="edit" title="위 '받은 그림 고치기' 칸의 글을 ChatGPT·Gemini 대화에 붙일 영어 문장으로">수정 문장 복사 (다른 앱에서 고칠 때)</button>
       </div>
       <details>
         <summary>장면 부분 직접 고치기 (영어)</summary>
@@ -904,14 +978,16 @@ function renderScenes(){
         ${i > 0 ? `<label class="f">앞 장면과 이어짐 (link)</label><input type="text" data-f="link" value="${esc(s.link)}">
         <label class="f samep"><input type="checkbox" data-f="same_place"${s.same_place === false ? '' : ' checked'}> 앞 장면과 같은 장소 (끄면 '자동'일 때 앞 장면 그림을 보내지 않아요)</label>` : ''}
       </details>
-      <div class="row">        <label class="btn">그림 올리기<input type="file" accept="image/*" data-act="upload" hidden></label>
+      <div class="row" style="margin-top:10px">
+        <label class="btn">그림 올리기<input type="file" accept="image/*" data-act="upload" hidden></label>
         <button class="btn" data-act="down">받기</button>
         <button class="btn" data-act="undo" title="그리기·고치기 바로 전 그림으로">↩ 전 그림</button>
+        <button class="btn" data-act="qc" title="AI가 그림을 보고 설정과 다른 곳을 찾아요">🔍 검사</button>
       </div>
       <button class="link" data-act="scaleimg" style="margin-top:6px">📏 이 그림으로 크기 기준 잡기${i === 0 ? ' (장면 01은 올리면 자동)' : ''}</button>
       </details>
     </div>`).join('');
-  proj.scenes.forEach(s => { showSceneImg(s.id); showSketch(s.id); });
+  proj.scenes.forEach(s => { showSceneImg(s.id); showSketch(s.id); showHist(s); renderCands(s); renderChat(s); renderQC(s); });
   renderCheck(); renderExport();
 }
 const skUrls = {};
@@ -935,7 +1011,7 @@ async function showSceneImg(id){
   if (b){ urls[id] = URL.createObjectURL(b); el.style.backgroundImage = `url(${urls[id]})`; el.textContent = ''; }
   else { delete urls[id]; el.style.backgroundImage = ''; el.innerHTML = '그림<br>없음'; }
 }
-async function clearScenes(){ for (const s of proj.scenes){ await idb.del('scene:' + s.id); await idb.del('undo:' + s.id); await idb.del('sketch:' + s.id); } proj.scenes = []; }
+async function clearScenes(){ for (const s of proj.scenes) await delSceneData(s); proj.scenes = []; }
 
 // 원문과 자막 줄을 이었을 때 똑같은지 (공백 무시) — AI가 글을 바꿨는지 확인
 const norm = s => s.replace(/\s+/g, '');
@@ -972,12 +1048,12 @@ $('#scenes').addEventListener('input', e => {
 });
 $('#scenes').addEventListener('keydown', e => {
   if (e.key === 'Enter' && e.target.matches('[data-ask]')){ e.preventDefault(); e.target.closest('.scene').querySelector('[data-act=redo]').click(); }
-  if (e.key === 'Enter' && e.target.matches('[data-edit]')){ e.preventDefault(); e.target.closest('.scene').querySelector('[data-act=edit]').click(); }
+  if (e.key === 'Enter' && e.target.matches('[data-edit]')){ e.preventDefault(); e.target.closest('.scene').querySelector(gptKey() ? '[data-act=fix]' : '[data-act=edit]').click(); }
 });
 $('#scenes').addEventListener('change', async e => {
   if (e.target.dataset.act !== 'upload') return;
   const s = sceneOf(e.target), f = e.target.files[0]; if (!s || !f) return;
-  await idb.set('scene:' + s.id, f); e.target.value = ''; showSceneImg(s.id);
+  e.target.value = ''; await addHist(s, f, 'up');
   if (proj.scenes.indexOf(s) === 0 && proj.bible && aiKey()) scaleFromImage(s);   // 첫 장면 그림 = 크기의 정답
   else toast('그림을 넣었습니다');
 });
@@ -999,10 +1075,26 @@ $('#scenes').addEventListener('click', async e => {
     case 'fix': {
       const input = b.closest('.scene').querySelector('[data-edit]'), req = input.value.trim();
       if (!req) return toast('그림에서 바꿀 것을 적어 주세요');
-      if (await fixScene(s, req)) input.value = '';
+      if (await chatFix(s, req)) input.value = '';
       break;
     }
+    case 'mask': openMask(s); break;
+    case 'cands': drawCands(s); break;
+    case 'candview': case 'hist': openPick(s, b.dataset.h); break;
+    case 'canduse': await useCand(s, b.dataset.h); toast('이 후보로 정했습니다'); break;
+    case 'candhq': refineHist(s, b.dataset.h); break;
+    case 'canddrop': await dropCands(s); renderCands(s); toast('후보를 버렸습니다'); break;
+    case 'chatnew': s.chat = null; saveProj(); renderChat(s); toast('다음 고치기는 지금 그림으로 새 대화를 시작해요'); break;
+    case 'qc': checkScene(s, false); break;
+    case 'qcfix': {
+      const q = qcOf(s), p = q && arr(q.problems)[+b.dataset.q]; if (!p) return;
+      const input = b.closest('.scene').querySelector('[data-edit]');
+      input.value = input.value.trim() ? `${input.value.trim()}, ${p.fix}` : p.fix;
+      input.focus(); input.scrollIntoView({behavior: 'smooth', block: 'center'});
+      toast('고치기 칸에 넣었어요. 💬 GPT로 고치기를 누르세요'); break;
+    }
     case 'undo': {
+      if (s.prev && arr(s.hist).some(h => h.id === s.prev)){ await setCur(s, s.prev); toast('전 그림으로 바꿨습니다. 한 번 더 누르면 다시 돌아와요'); break; }
       const old = await idb.get('undo:' + s.id); if (!old) return toast('되돌릴 전 그림이 없습니다');
       const cur = await idb.get('scene:' + s.id);
       await idb.set('scene:' + s.id, old);
@@ -1028,7 +1120,7 @@ $('#scenes').addEventListener('click', async e => {
       prev.lines = prev.lines.concat(s.lines);
       prev.cast = [...new Set(prev.cast.concat(s.cast))];
       proj.scenes.splice(i, 1); saveProj(); renderScenes();
-      idb.del('scene:' + s.id); idb.del('sketch:' + s.id);
+      delSceneData(s);
       toast('합쳤습니다. 합친 장면은 "다시 만들기"로 그림 설계를 새로 받아 보세요'); break;
     }
     case 'cut': {
@@ -1045,7 +1137,7 @@ $('#scenes').addEventListener('click', async e => {
     }
     case 'del':
       if (!confirm(`장면 ${pad(i + 1)}을 지울까요? 자막 줄도 같이 빠집니다.`)) return;
-      proj.scenes.splice(i, 1); saveProj(); renderScenes(); idb.del('scene:' + s.id); idb.del('undo:' + s.id); idb.del('sketch:' + s.id); break;
+      proj.scenes.splice(i, 1); saveProj(); renderScenes(); delSceneData(s); break;
     case 'scaleimg': scaleFromImage(s); break;
     case 'sketch': openSketch(s); break;
     case 'skdel':
@@ -1148,6 +1240,16 @@ function castSheetPrompt(c, hasRef){
     b.palette && `PALETTE: ${b.palette}`,
     `STYLE: ${curStyle().text.trim()}`
   ];
+  if (isChar(c)) return [
+    'Create a character reference sheet for ONE personified object: a living character in a picture book, on plain warm off-white paper. It is the object itself come to life, not a person and not a costume.',
+    `CHARACTER: ${c.en}`,
+    c.size && `SIZE: ${c.size}`,
+    'Keep the object\'s own shape, material and colors as its body, and give it the face (and limbs, if described) exactly as written. Show it in a neat row: front view, three-quarter view, side view and back view. Below that, a row of four face close-ups: calm, happy, sad and surprised, so its expressions stay consistent.',
+    'Only this one character appears on the sheet: no humans, hands or other objects.',
+    ...common,
+    hasRef && 'Image 1 is only a painting style reference: copy its brushwork, lines and color mood, and leave out every person, character and object that appears in Image 1.',
+    'Soft even daylight, no background scenery. A clean, wordless sheet: free of labels, lettering, arrows and watermarks.'
+  ].filter(Boolean).join('\n\n');
   if (isPerson(c)) return [
     'Create a character reference sheet for ONE person from a picture book, on plain warm off-white paper.',
     `SUBJECT: ${c.en}`,
@@ -1175,7 +1277,7 @@ async function makeCastSheet(k, btn){
   btn.disabled = true; btn.textContent = '그리는 중… (1분쯤)';
   try{
     const ref = await idb.get(refKey());
-    const blob = await gptImage(castSheetPrompt(c, !!ref), ref ? [ref] : [], '1536x1024');
+    const blob = await gptImage(castSheetPrompt(c, !!ref), ref ? [ref] : [], {size: '1536x1024'});
     await idb.set(castKey(c), blob); showCastImgs(); showErr(item, '');
     toast(`'${c.ko || c.id}' 설정 그림을 만들었습니다. 이 인물·사물이 나오는 장면에 같이 보내요`);
   }catch(e){ toast('설정 그림 실패 — ' + (e.message || e)); showErr(item, e.message || String(e)); }
@@ -1256,46 +1358,150 @@ async function gptJSON(parts){
   }
   throw lastErr;
 }
-/* 그림: 같이 보낼 그림이 있으면 edits(그림 여러 장 + 글), 없으면 generations. 정사각 1024 */
+/* 그림: 같이 보낼 그림이 있으면 edits(그림 여러 장 + 글), 없으면 generations. 기본 정사각 1024
+   opt: {size, quality, n(여러 장 — 후보), mask(칠한 곳만 고치기: 첫 그림에 씌움, 투명한 곳이 고칠 곳)} */
 function b64Blob(b64, type){
   const bin = atob(b64), u = new Uint8Array(bin.length);
   for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i);
   return new Blob([u], {type});
 }
-async function gptImage(prompt, images, size = '1024x1024'){
+const IMG_WON = {low: 25, medium: 65, high: 200};
+async function gptImageReq(prompt, images, opt){
   const k = knotCfg(), model = k.imgModel, auth = {Authorization: 'Bearer ' + gptKey()};
+  const size = opt.size || '1024x1024', quality = opt.quality || k.imgQuality, n = opt.n || 1;
   let res;
   if (images.length){
     const fd = new FormData();
-    fd.append('model', model); fd.append('prompt', prompt); fd.append('size', size); fd.append('quality', k.imgQuality);
+    fd.append('model', model); fd.append('prompt', prompt); fd.append('size', size); fd.append('quality', quality);
+    if (n > 1) fd.append('n', String(n));
     images.forEach((b, i) => fd.append('image[]', b, `image${i + 1}.${(b.type || 'image/png').split('/')[1]}`));
+    if (opt.mask) fd.append('mask', opt.mask, 'mask.png');
     res = await gptFetch('https://api.openai.com/v1/images/edits', {method: 'POST', headers: auth, body: fd});
   } else {
+    const body = {model, prompt, size, quality};
+    if (n > 1) body.n = n;
     res = await gptFetch('https://api.openai.com/v1/images/generations', {
-      method: 'POST', headers: Object.assign({'Content-Type': 'application/json'}, auth),
-      body: JSON.stringify({model, prompt, size, quality: k.imgQuality})
+      method: 'POST', headers: Object.assign({'Content-Type': 'application/json'}, auth), body: JSON.stringify(body)
     });
   }
   if (!res.ok) throw await gptErr(res, model);
   const d = await res.json();
   if (window.NuemaCost) NuemaCost.addOpenAI('knot', model, d.usage);
-  const b64 = d.data && d.data[0] && d.data[0].b64_json;
-  if (!b64) throw new Error('그림을 받지 못했습니다');
-  return b64Blob(b64, 'image/png');
+  const out = arr(d.data).map(x => x && x.b64_json).filter(Boolean).map(b => b64Blob(b, 'image/png'));
+  if (!out.length) throw new Error('그림을 받지 못했습니다');
+  return out;
 }
-// 새 그림을 넣기 전에 지금 그림을 undo:<장면> 에 한 장 남겨 둔다 (↩ 전 그림)
-async function putSceneImg(s, blob){
+// 여러 장: 한 번에 n 장을 부탁하고, 모자라게 오거나 n 을 못 받는다고 하면 나머지는 한 장씩 동시에
+async function gptImages(prompt, images, opt = {}){
+  const n = opt.n || 1;
+  let got = [];
+  try{ got = await gptImageReq(prompt, images, opt); }
+  catch(e){ if (n === 1 || e.final || !/\bn\b|number of images/i.test(e.message || '')) throw e; }
+  const left = n - got.length;
+  if (left > 0){
+    const more = await Promise.allSettled(Array.from({length: left}, () => gptImageReq(prompt, images, Object.assign({}, opt, {n: 1}))));
+    more.forEach(r => { if (r.status === 'fulfilled') got.push(...r.value); });
+    if (!got.length){ const bad = more.find(r => r.status === 'rejected'); throw bad ? bad.reason : new Error('그림을 받지 못했습니다'); }
+  }
+  return got.slice(0, n);
+}
+async function gptImage(prompt, images, opt = {}){ return (await gptImages(prompt, images, Object.assign({}, opt, {n: 1})))[0]; }
+
+/* ---------- 장면 그림 내력 ----------
+   그린·고친·올린 그림을 장면마다 모두 남긴다: 그림은 h:<장면>:<번호>, 목록은 s.hist [{id, at, kind, note}].
+   지금 쓰는 그림은 예전처럼 scene:<장면> (드라이브 올리기·받기는 그대로), 그 번호가 s.cur, 바로 전 번호가 s.prev(↩ 전 그림).
+   폰 저장 공간 때문에 장면마다 최근 HIST_MAX 장만 남긴다 (지금 그림·전 그림·고르는 중인 후보는 지우지 않음) */
+const HIST_MAX = 15;
+const KIND_KO = {old: '예전', draw: '그림', cand: '후보', hq: '좋게', fix: '고침', chat: '대화', mask: '칠함', up: '올림'};
+const histKey = (s, hid) => `h:${s.id}:${hid}`;
+const sceneKeys = s => ['scene:' + s.id, 'undo:' + s.id, 'sketch:' + s.id, ...arr(s.hist).map(h => histKey(s, h.id))];
+async function delSceneData(s){ for (const k of sceneKeys(s)) await idb.del(k); }
+// 내력을 만들기 전에 있던 그림도 첫 칸으로 넣어 둔다
+async function ensureHist(s){
+  if (!Array.isArray(s.hist)) s.hist = [];
+  if (s.hist.length) return;
   const old = await idb.get('scene:' + s.id);
-  if (old) await idb.set('undo:' + s.id, old);
-  await idb.set('scene:' + s.id, blob);
-  showSceneImg(s.id);
+  if (old){ const id = uid(); await idb.set(histKey(s, id), old); s.hist.push({id, at: Date.now(), kind: 'old'}); s.cur = id; }
 }
+async function addHist(s, blob, kind, note, use = true){
+  await ensureHist(s);
+  const id = uid();
+  await idb.set(histKey(s, id), blob);
+  s.hist.push({id, at: Date.now(), kind, note: note || ''});
+  if (use) await setCur(s, id, blob);
+  const keep = new Set([s.cur, s.prev, ...arr(s.cands)]);
+  while (s.hist.length > HIST_MAX){
+    const k = s.hist.findIndex(h => !keep.has(h.id)); if (k < 0) break;
+    await idb.del(histKey(s, s.hist[k].id)); s.hist.splice(k, 1);
+  }
+  saveProj(); showHist(s);
+  return id;
+}
+async function setCur(s, hid, blob){
+  blob = blob || await idb.get(histKey(s, hid)); if (!blob) return false;
+  if (s.cur && s.cur !== hid) s.prev = s.cur;
+  s.cur = hid;
+  await idb.set('scene:' + s.id, blob);
+  saveProj(); showSceneImg(s.id); showHist(s); renderChat(s); renderQC(s);
+  return true;
+}
+const putSceneImg = (s, blob, kind, note) => addHist(s, blob, kind || 'draw', note);
+const hUrls = {}, hTok = {};
+// 그리는 중에 여러 번 불려 겹칠 수 있어서, 가장 나중에 부른 것만 화면에 쓴다 (예전 것이 늦게 끝나 후보를 내력에 섞던 문제)
+async function showHist(s){
+  const box = document.querySelector(`.scene[data-id="${s.id}"] [data-hist]`); if (!box) return;
+  const tok = hTok[s.id] = (hTok[s.id] || 0) + 1;
+  const list = arr(s.hist).filter(h => !arr(s.cands).includes(h.id)).slice().reverse();   // 최근 것이 앞에
+  const urls2 = [], items = [];
+  for (const h of list){
+    const b = await idb.get(histKey(s, h.id)); if (!b) continue;
+    const u = URL.createObjectURL(b); urls2.push(u);
+    items.push(`<button class="h${h.id === s.cur ? ' on' : ''}" data-act="hist" data-h="${h.id}" title="${esc(h.note || KIND_KO[h.kind] || '')}"><i style="background-image:url(${u})"></i>${h.id === s.cur ? '지금' : esc(KIND_KO[h.kind] || '')}</button>`);
+  }
+  if (tok !== hTok[s.id]){ urls2.forEach(u => URL.revokeObjectURL(u)); return; }
+  (hUrls[s.id] || []).forEach(u => URL.revokeObjectURL(u)); hUrls[s.id] = urls2;
+  box.innerHTML = items.length < 2 ? '' : `<p class="hint" style="margin:0 0 4px">그렸던 그림 ${items.length}장 — 눌러서 크게 보고 다시 고를 수 있어요</p><div class="hrow">${items.join('')}</div>`;
+}
+// 내력 그림 크게 보기 → 쓰기 · 좋은 품질로 · 받기 · 지우기
+const pk = {s: null, hid: null, url: ''};
+async function openPick(s, hid){
+  const h = arr(s.hist).find(x => x.id === hid), b = await idb.get(histKey(s, hid)); if (!h || !b) return;
+  pk.s = s; pk.hid = hid; if (pk.url) URL.revokeObjectURL(pk.url); pk.url = URL.createObjectURL(b);
+  $('#pkImg').src = pk.url;
+  const d = new Date(h.at), when = `${d.getMonth() + 1}/${d.getDate()} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  $('#pkInfo').textContent = `장면 ${pad(proj.scenes.indexOf(s) + 1)} · ${KIND_KO[h.kind] || ''} · ${when}${h.id === s.cur ? ' · 지금 쓰는 그림' : ''}${h.note ? ` · "${h.note}"` : ''}`;
+  $('#pkUse').hidden = h.id === s.cur; $('#pkDel').hidden = h.id === s.cur;
+  $('#dlgPick').showModal();
+}
+$('#pkClose').onclick = () => $('#dlgPick').close();
+$('#pkUse').onclick = async () => { const {s, hid} = pk; $('#dlgPick').close(); await useCand(s, hid); toast('이 그림으로 바꿨습니다'); };
+$('#pkHq').onclick = () => { const {s, hid} = pk; $('#dlgPick').close(); refineHist(s, hid); };
+$('#pkDown').onclick = async () => { const b = await idb.get(histKey(pk.s, pk.hid)); if (b) download(b, `${pad(proj.scenes.indexOf(pk.s) + 1)}-${pk.hid}.png`); };
+$('#pkDel').onclick = async () => {
+  const {s, hid} = pk; $('#dlgPick').close();
+  s.hist = arr(s.hist).filter(h => h.id !== hid); s.cands = arr(s.cands).filter(x => x !== hid);
+  if (s.prev === hid) s.prev = null;
+  await idb.del(histKey(s, hid)); saveProj(); showHist(s); renderCands(s); toast('내력에서 지웠습니다');
+};
+// 후보·내력 그림을 지금 그림으로 — 고르는 중이던 후보 묶음은 정리한다 (안 고른 후보는 내력에서 뺌)
+async function useCand(s, hid){
+  if (arr(s.cands).includes(hid)) await dropCands(s, hid);
+  await setCur(s, hid);
+  renderCands(s); autoQC(s);
+}
+async function dropCands(s, keepId){
+  for (const id of arr(s.cands)) if (id !== keepId){
+    await idb.del(histKey(s, id)); s.hist = arr(s.hist).filter(h => h.id !== id);
+  }
+  s.cands = []; saveProj(); showHist(s);
+}
+
 function cardBusy(s, on, label){
   const card = document.querySelector(`.scene[data-id="${s.id}"]`); if (!card) return;
   card.classList.toggle('busy', on);
   const btn = card.querySelector('[data-act=draw]'); if (btn) btn.textContent = on && label ? label : '🎨 그리기';
 }
-/* 장면 하나 그리기 — 기준 그림(Image 1) + 바로 앞 장면 그림(Image 2)을 같이 보낸다 */
+/* 장면 하나 그리기 — 기준 그림 + 설정 그림 + (스케치·앞 장면 그림)을 같이 보낸다 */
 async function drawScene(s, inLoop){
   if (!keyReady(true)) return false;
   const i = proj.scenes.indexOf(s);
@@ -1304,20 +1510,162 @@ async function drawScene(s, inLoop){
   if (!inLoop) toast(`장면 ${pad(i + 1)}을 그리는 중… 1분쯤 걸려요`);
   try{
     const blob = await gptImage(scenePrompt(s, {refs}), refs.map(r => r.blob));
-    await putSceneImg(s, blob);
+    await putSceneImg(s, blob, 'draw');
     cardBusy(s, false); showErr(cardOf(s), '');
     if (i === 0 && proj.bible && aiKey()) await scaleFromImage(s);   // 첫 장면 그림 = 크기의 정답
     else toast(`장면 ${pad(i + 1)}을 그렸습니다`);
+    await autoQC(s);
     return true;
   }catch(e){ cardBusy(s, false); toast('그림 실패 — ' + (e.message || e)); showErr(cardOf(s), e.message || String(e)); return false; }
 }
-/* 받은 그림 조금 고치기 — 지금 그림(Image 1) + 기준 그림(Image 2), 바꿀 것만 */
+
+/* ---------- 🎲 후보 여러 장 → 고르기 ----------
+   싼 품질로 같은 프롬프트를 여러 장 받아 구도만 고른다. 고른 것은 그대로 쓰거나 ✨ 좋게(같은 구도를 좋은 품질로 다시) */
+async function drawCands(s){
+  if (!keyReady(true)) return;
+  const k = knotCfg(), n = Math.min(4, Math.max(2, +k.candN || 3)), q = k.candQuality || 'low', i = proj.scenes.indexOf(s);
+  const refs = await sceneRefs(s);
+  cardBusy(s, true, `후보 ${n}장 그리는 중… (1~2분)`);
+  toast(`장면 ${pad(i + 1)} 후보 ${n}장을 그리는 중… 약 ${(n * (IMG_WON[q] || 25)).toLocaleString()}원`);
+  try{
+    const blobs = await gptImages(scenePrompt(s, {refs}), refs.map(r => r.blob), {n, quality: q});
+    await dropCands(s);
+    s.cands = [];
+    for (const b of blobs){ const id = await addHist(s, b, 'cand', '', false); s.cands.push(id); }
+    saveProj(); showHist(s); renderCands(s);
+    cardBusy(s, false); showErr(cardOf(s), '');
+    toast(`후보 ${blobs.length}장이 왔어요. 마음에 드는 구도를 골라 주세요`);
+    const box = cardOf(s) && cardOf(s).querySelector('[data-cands]'); if (box) box.scrollIntoView({behavior: 'smooth', block: 'center'});
+  }catch(e){ cardBusy(s, false); toast('후보 실패 — ' + (e.message || e)); showErr(cardOf(s), e.message || String(e)); }
+}
+const cUrls = {}, cTok = {};
+async function renderCands(s){
+  const box = document.querySelector(`.scene[data-id="${s.id}"] [data-cands]`); if (!box) return;
+  const tok = cTok[s.id] = (cTok[s.id] || 0) + 1;
+  const ids = arr(s.cands);
+  const cells = [], urls2 = [];
+  for (const [k, id] of ids.entries()){
+    const b = await idb.get(histKey(s, id)); if (!b) continue;
+    const u = URL.createObjectURL(b); urls2.push(u);
+    cells.push(`<div class="c"><i data-act="candview" data-h="${id}" style="background-image:url(${u})" role="button" aria-label="후보 ${k + 1} 크게 보기"></i>
+      <div class="row"><button class="btn" data-act="canduse" data-h="${id}">이걸로</button><button class="btn ai" data-act="candhq" data-h="${id}">✨ 좋게</button></div></div>`);
+  }
+  if (tok !== cTok[s.id]){ urls2.forEach(u => URL.revokeObjectURL(u)); return; }
+  (cUrls[s.id] || []).forEach(u => URL.revokeObjectURL(u)); cUrls[s.id] = urls2;
+  if (!cells.length){ box.innerHTML = ''; return; }
+  box.innerHTML = `<div class="cands"><b>🎲 후보 ${cells.length}장 — 마음에 드는 구도를 골라 주세요</b>
+    <div class="hint" style="margin:2px 0 0">싼 초안이라 거칠어요. <b>이걸로</b> = 이 그림 그대로 쓰기 · <b>✨ 좋게</b> = 이 구도 그대로 좋은 품질로 다시 그리기 (약 ${IMG_WON[knotCfg().imgQuality === 'low' ? 'medium' : knotCfg().imgQuality]}원)</div>
+    <div class="grid">${cells.join('')}</div>
+    <div class="row" style="margin-top:8px"><button class="btn warn" data-act="canddrop">후보 모두 버리기</button></div></div>`;
+}
+/* ✨ 고른 초안을 같은 구도로 좋은 품질로 다시 — 초안을 Image 1 로 붙이고 "구도·자리·방향은 그대로" */
+async function refineHist(s, hid){
+  if (!keyReady(true)) return;
+  const draft = await idb.get(histKey(s, hid)); if (!draft) return;
+  const i = proj.scenes.indexOf(s), q = knotCfg().imgQuality === 'low' ? 'medium' : knotCfg().imgQuality;
+  const refs = [{blob: draft, role: 'draft'}, ...(await sceneRefs(s, false)).filter(r => r.role !== 'layout')];
+  cardBusy(s, true, '좋은 품질로 그리는 중… (1분쯤)');
+  toast(`장면 ${pad(i + 1)}을 고른 구도로 다시 그리는 중… 1분쯤 걸려요`);
+  try{
+    const blob = await gptImage(scenePrompt(s, {refs}), refs.map(r => r.blob), {quality: q});
+    if (arr(s.cands).includes(hid)) await dropCands(s);
+    await putSceneImg(s, blob, 'hq', '고른 구도를 좋은 품질로');
+    renderCands(s); cardBusy(s, false); showErr(cardOf(s), '');
+    toast(`장면 ${pad(i + 1)}을 좋은 품질로 그렸습니다`);
+    await autoQC(s);
+  }catch(e){ cardBusy(s, false); toast('그림 실패 — ' + (e.message || e)); showErr(cardOf(s), e.message || String(e)); }
+}
+
+/* ---------- 💬 대화하며 고치기 ----------
+   ChatGPT 앱처럼 장면마다 대화 하나를 이어 간다 (OpenAI Responses API + 그림 도구, previous_response_id).
+   GPT가 앞에서 한 말과 앞서 만든 그림을 기억해서 "조금 더 왼쪽", "아까보다 작게"가 통한다.
+   대화는 그 대화로 만든 그림(s.chat.hid)이 지금 그림일 때만 잇는다 — 다른 그림을 고르거나 올리면 다음 고치기는 새 대화.
+   OpenAI 가 대화를 오래 보관하지 않으므로(약 30일) 이어지지 않으면 지금 그림으로 새 대화를 연다 */
+const dataUrl = async b => `data:${b.type || 'image/png'};base64,${await blobB64(b)}`;
+const chatOn = s => !!(s.chat && s.chat.resp && s.chat.hid && s.chat.hid === s.cur);
+function fixIntro(s, refs){
+  const b = proj.bible || {};
+  return [
+    'Image 1 is an illustration from a picture book. I will ask you to edit it, maybe several times in this conversation. Each time, change only what I ask and keep everything else exactly the same: the characters, their faces and clothes, the composition, the colors and the painting style.',
+    refs.length && refs.map((r, k) => `Image ${k + 2} is ` + (r.role === 'style' ? 'the painting style and character reference: keep characters identical to it.' : `the reference sheet for "${r.c.id}": use it for identity and follow the requested change for the current state.`)).join('\n'),
+    castLines(s.cast, refs.filter(r => r.role === 'cast').map(r => r.c.id)) && `CHARACTERS AND OBJECTS:\n${castLines(s.cast, refs.filter(r => r.role === 'cast').map(r => r.c.id))}`,
+    b.scale && `SIZE AND SCALE: ${b.scale}`,
+    RULES
+  ].filter(Boolean).join('\n\n');
+}
+async function chatFix(s, req){
+  if (!keyReady(true)) return false;
+  const i = proj.scenes.indexOf(s), cur = await idb.get('scene:' + s.id);
+  if (!cur){ toast('고칠 그림이 없습니다. 먼저 그리거나 올려 주세요'); return false; }
+  await ensureHist(s);
+  const k = knotCfg(), ko = hasKo(req) ? ' (the request is written in Korean)' : '';
+  const tool = {type: 'image_generation', model: k.imgModel, size: '1024x1024', quality: k.imgQuality, action: 'edit'};
+  const send = async fresh => {
+    let input;
+    if (fresh){
+      const refs = (await sceneRefs(s, false)).filter(r => r.role !== 'layout' && r.role !== 'prev');
+      const content = [{type: 'input_text', text: fixIntro(s, refs) + `\n\nFirst edit — change only this${ko}: ${req}`}];
+      for (const b of [cur, ...refs.map(r => r.blob)]) content.push({type: 'input_image', image_url: await dataUrl(b)});
+      input = [{role: 'user', content}];
+    } else input = [{role: 'user', content: [{type: 'input_text', text: `Edit the image you made last, once more. Keep everything else exactly as it is in that image. Change only this${ko}: ${req}`}]}];
+    const body = {model: k.gptModel, input, tools: [tool], tool_choice: {type: 'image_generation'}};
+    if (!fresh) body.previous_response_id = s.chat.resp;
+    return gptFetch('https://api.openai.com/v1/responses', {method: 'POST', headers: {'Content-Type': 'application/json', Authorization: 'Bearer ' + gptKey()}, body: JSON.stringify(body)});
+  };
+  const errText = async res => { try{ const e = (await res.clone().json()).error || {}; return `${e.code || ''} ${e.param || ''} ${e.message || ''}`; }catch(x){ return ''; } };
+  cardBusy(s, true); toast(`장면 ${pad(i + 1)} 그림을 고치는 중… 1분쯤 걸려요`);
+  try{
+    let cont = chatOn(s), res = await send(!cont);
+    // 이어 가던 대화가 OpenAI 쪽에서 사라졌으면 지금 그림으로 새 대화
+    if (!res.ok && cont && [400, 404].includes(res.status) && /previous_response|not.?found/i.test(await errText(res))){ cont = false; res = await send(true); }
+    if (!res.ok){
+      const why = await errText(res);
+      // 이 키·모델로 대화 고치기(그림 도구)를 못 쓰면 예전 방식(한 번에 고치기)으로
+      if ([400, 404].includes(res.status) && /image_generation|tools?\b|not supported|unsupported|does not exist|model/i.test(why)){
+        cardBusy(s, false);
+        toast('대화로 고치기를 못 써서 한 번에 고치는 방식으로 합니다');
+        return fixScene(s, req);
+      }
+      throw await gptErr(res, k.gptModel);
+    }
+    const d = await res.json();
+    if (window.NuemaCost){
+      const u = d.usage || {};
+      NuemaCost.addOpenAI('knot', k.gptModel, {prompt_tokens: u.input_tokens || 0, completion_tokens: u.output_tokens || 0, prompt_tokens_details: {cached_tokens: (u.input_tokens_details && u.input_tokens_details.cached_tokens) || 0}});
+      NuemaCost.addWon('knot', IMG_WON[k.imgQuality] || 65, true);
+    }
+    const call = arr(d.output).find(o => o && o.type === 'image_generation_call' && o.result);
+    if (!call){
+      const said = arr(d.output).filter(o => o && o.type === 'message').flatMap(o => arr(o.content)).map(c => c.text || '').join(' ').trim();
+      throw new Error(said ? 'GPT가 그림 대신 말로만 답했어요: ' + said.slice(0, 160) : '그림을 받지 못했습니다');
+    }
+    const turns = cont ? arr(s.chat.turns) : [];
+    const hid = await putSceneImg(s, b64Blob(call.result, 'image/png'), 'chat', req);
+    s.chat = {resp: d.id, hid, turns: turns.concat(req)};
+    saveProj(); renderChat(s);
+    cardBusy(s, false); showErr(cardOf(s), '');
+    toast(`장면 ${pad(i + 1)} 그림을 고쳤습니다. 이어서 더 말해도 돼요`);
+    await autoQC(s);
+    return true;
+  }catch(e){ cardBusy(s, false); toast('고치기 실패 — ' + (e.message || e)); showErr(cardOf(s), e.message || String(e)); return false; }
+}
+function renderChat(s){
+  const card = cardOf(s); if (!card) return;
+  const box = card.querySelector('[data-chat]'), btn = card.querySelector('[data-act=fix]');
+  const on = chatOn(s);
+  if (btn) btn.textContent = on ? '💬 이어서 고치기' : '💬 GPT로 고치기';
+  if (!box) return;
+  box.innerHTML = on ? `<div class="chatlog">💬 이 그림과 대화 중 — 다음 고치기는 앞에서 한 말을 기억해요
+    <ol>${arr(s.chat.turns).map(x => `<li>${esc(x)}</li>`).join('')}</ol>
+    <button class="link" data-act="chatnew">새 대화로 시작하기</button></div>` : '';
+}
+
+/* 예전 방식: 받은 그림 한 번에 고치기 — 지금 그림(Image 1) + 기준 그림·설정 그림, 바꿀 것만. 대화 고치기를 못 쓸 때 */
 async function fixScene(s, req){
   if (!keyReady(true)) return false;
   const i = proj.scenes.indexOf(s), cur = await idb.get('scene:' + s.id);
   if (!cur){ toast('고칠 그림이 없습니다. 먼저 그리거나 올려 주세요'); return false; }
-  // 고치기는 지금 그림을 살리는 일이라 구도 스케치는 보내지 않는다
-  const refs = (await sceneRefs(s, false)).filter(r => r.role !== 'layout'), b = proj.bible || {};
+  const refs = (await sceneRefs(s, false)).filter(r => r.role !== 'layout' && r.role !== 'prev'), b = proj.bible || {};
   const prompt = [
     'Edit Image 1, an illustration from a picture book.',
     'Keep the characters, their faces and clothes, the composition, the colors and the painting style exactly the same.',
@@ -1328,10 +1676,146 @@ async function fixScene(s, req){
   ].filter(Boolean).join('\n\n');
   cardBusy(s, true); toast(`장면 ${pad(i + 1)} 그림을 고치는 중… 1분쯤 걸려요`);
   try{
-    await putSceneImg(s, await gptImage(prompt, [cur, ...refs.map(r => r.blob)]));
+    await putSceneImg(s, await gptImage(prompt, [cur, ...refs.map(r => r.blob)]), 'fix', req);
     cardBusy(s, false); showErr(cardOf(s), ''); toast(`장면 ${pad(i + 1)} 그림을 고쳤습니다. 마음에 안 들면 ↩ 전 그림`);
+    await autoQC(s);
     return true;
   }catch(e){ cardBusy(s, false); toast('고치기 실패 — ' + (e.message || e)); showErr(cardOf(s), e.message || String(e)); return false; }
+}
+
+/* ---------- 🖌 칠한 곳만 고치기 ----------
+   지금 그림 위에 손가락으로 칠한 곳만 다시 그린다. 칠한 획은 따로 모아 두었다가(mk.layer)
+   그 모양으로 가면(mask)을 만든다: 칠한 곳은 투명, 나머지는 불투명 — 그림과 같은 크기의 PNG */
+const mk = {s: null, img: null, strokes: [], cur: null, layer: null};
+const mkCv = $('#mkCanvas'), mkCtx = mkCv.getContext('2d');
+function mkStrokes(ctx){
+  ctx.strokeStyle = '#E8452C'; ctx.lineCap = ctx.lineJoin = 'round';
+  for (const st of mk.strokes){
+    ctx.lineWidth = st.w; ctx.beginPath(); ctx.moveTo(st.p[0][0], st.p[0][1]);
+    st.p.forEach(q => ctx.lineTo(q[0], q[1]));
+    if (st.p.length === 1) ctx.lineTo(st.p[0][0] + 0.1, st.p[0][1]);
+    ctx.stroke();
+  }
+}
+function mkDraw(){
+  if (!mk.img) return;
+  mkCtx.globalAlpha = 1; mkCtx.drawImage(mk.img, 0, 0, mkCv.width, mkCv.height);
+  const L = mk.layer.getContext('2d'); L.clearRect(0, 0, mk.layer.width, mk.layer.height); mkStrokes(L);
+  mkCtx.globalAlpha = .5; mkCtx.drawImage(mk.layer, 0, 0); mkCtx.globalAlpha = 1;
+}
+const mkPt = e => { const r = mkCv.getBoundingClientRect(); return [(e.clientX - r.left) * mkCv.width / r.width, (e.clientY - r.top) * mkCv.height / r.height]; };
+mkCv.addEventListener('pointerdown', e => { e.preventDefault(); mkCv.setPointerCapture(e.pointerId); mk.cur = {w: mkCv.width * +$('#mkSize').value, p: [mkPt(e)]}; mk.strokes.push(mk.cur); mkDraw(); });
+mkCv.addEventListener('pointermove', e => { if (!mk.cur) return; mk.cur.p.push(mkPt(e)); mkDraw(); });
+['pointerup', 'pointercancel'].forEach(t => mkCv.addEventListener(t, () => { mk.cur = null; }));
+async function openMask(s){
+  const cur = await idb.get('scene:' + s.id);
+  if (!cur) return toast('고칠 그림이 없습니다. 먼저 그리거나 올려 주세요');
+  try{ mk.img = await createImageBitmap(cur); }catch(e){ return toast('그림을 열지 못했습니다'); }
+  mk.s = s; mk.strokes = []; mk.cur = null;
+  mkCv.width = mk.img.width; mkCv.height = mk.img.height;
+  mk.layer = document.createElement('canvas'); mk.layer.width = mkCv.width; mk.layer.height = mkCv.height;
+  $('#mkNo').textContent = `장면 ${pad(proj.scenes.indexOf(s) + 1)}`;
+  const card = cardOf(s), typed = card && card.querySelector('[data-edit]');
+  $('#mkReq').value = typed ? typed.value.trim() : '';
+  mkDraw(); $('#dlgMask').showModal();
+}
+$('#mkUndo').onclick = () => { mk.strokes.pop(); mkDraw(); };
+$('#mkClear').onclick = () => { mk.strokes = []; mkDraw(); };
+$('#mkCancel').onclick = () => $('#dlgMask').close();
+const canvasPng = cv => new Promise(r => cv.toBlob(r, 'image/png'));
+$('#mkGo').onclick = async () => {
+  const s = mk.s, req = $('#mkReq').value.trim();
+  if (!mk.strokes.length) return toast('고칠 곳을 먼저 칠해 주세요');
+  if (!req) return toast('칠한 곳을 어떻게 바꿀지 적어 주세요');
+  const W = mkCv.width, H = mkCv.height;
+  const base = document.createElement('canvas'); base.width = W; base.height = H; base.getContext('2d').drawImage(mk.img, 0, 0, W, H);
+  const m = document.createElement('canvas'); m.width = W; m.height = H;
+  const c = m.getContext('2d'); c.fillStyle = '#000'; c.fillRect(0, 0, W, H);
+  c.globalCompositeOperation = 'destination-out'; mkStrokes(c);
+  const [img, mask] = [await canvasPng(base), await canvasPng(m)];
+  $('#dlgMask').close();
+  maskFix(s, req, img, mask);
+};
+async function maskFix(s, req, img, mask){
+  if (!keyReady(true)) return;
+  const i = proj.scenes.indexOf(s), b = proj.bible || {};
+  const refs = (await sceneRefs(s, false)).filter(r => r.role !== 'layout' && r.role !== 'prev');
+  const prompt = [
+    'Edit Image 1, an illustration from a picture book. Repaint only the masked area; everything outside it stays exactly the same, and the repainted part blends seamlessly in the same painting style.',
+    `In the masked area, change this${hasKo(req) ? ' (the request is written in Korean)' : ''}: ${req}`,
+    refs.length && refs.map((r, k) => `Image ${k + 2} is ` + (r.role === 'style' ? 'the painting style and character reference.' : `the reference sheet for "${r.c.id}": use it for identity and follow the requested change for the current state.`)).join('\n'),
+    castLines(s.cast, refs.filter(r => r.role === 'cast').map(r => r.c.id)) && `CHARACTERS AND OBJECTS:\n${castLines(s.cast, refs.filter(r => r.role === 'cast').map(r => r.c.id))}`,
+    b.scale && `SIZE AND SCALE: ${b.scale}`,
+    RULES
+  ].filter(Boolean).join('\n\n');
+  cardBusy(s, true); toast(`장면 ${pad(i + 1)}의 칠한 곳을 고치는 중… 1분쯤 걸려요`);
+  try{
+    const blob = await gptImage(prompt, [img, ...refs.map(r => r.blob)], {mask});
+    await putSceneImg(s, blob, 'mask', req);
+    const card = cardOf(s), typed = card && card.querySelector('[data-edit]'); if (typed) typed.value = '';
+    cardBusy(s, false); showErr(cardOf(s), ''); toast(`칠한 곳을 고쳤습니다. 마음에 안 들면 ↩ 전 그림`);
+    await autoQC(s);
+  }catch(e){ cardBusy(s, false); toast('고치기 실패 — ' + (e.message || e)); showErr(cardOf(s), e.message || String(e)); }
+}
+
+/* ---------- 🔍 그린 뒤 AI 검사 ----------
+   그림과 설정 그림을 같이 보여 주고 장면 설계와 눈에 띄게 다른 곳만 찾게 한다. 결과는 사라지지 않게 카드에 남긴다
+   (그 그림이 지금 그림일 때만 보임). 문제마다 "고치기 칸에 넣기" → 💬 고치기로 바로 이어진다 */
+function qcPrompt(s, sheets){
+  const i = proj.scenes.indexOf(s), b = proj.bible || {};
+  const kind = c => isChar(c) ? '의인화된 사물(얼굴·표정이 있어야 함)' : isPerson(c) ? '인물' : '사물';
+  const cast = arr(b.cast).filter(c => s.cast.includes(c.id)).map(c => ({id: c.id, 이름: c.ko, 종류: kind(c), 생김새: c.en, 크기: c.size || ''}));
+  return `너는 그림책 그림 검수자야. 첨부 1번은 장면 ${i + 1} 그림이야.${sheets.length ? ` 그 뒤는 설정 그림이야: ${sheets.map((x, k) => `${k + 2}번 = ${x.c.ko || x.c.id}`).join(', ')}.` : ''}
+아래 장면 설계와 비교해서 "눈에 띄게 틀린 것"만 찾아줘. 그림체·붓 터치·취향 차이는 문제가 아니야. 애매하면 문제로 치지 마.
+살펴볼 것:
+1. 설계에 없는 사람·동물·물건이 들어갔는지 (특히 기준 그림 속 사람이 끼어들었는지)
+2. 인물·사물의 생김새·색·옷·몸에 지닌 것이 설정과 다른지 (한쪽에 차는 것은 왼쪽·오른쪽까지). 단, 이야기 속에서 바뀌는 모양·상태는 장면 설계(action)를 따르니 설계대로 바뀐 것은 문제가 아니야
+3. 의인화된 사물이 얼굴·표정 없이 그냥 물건처럼 나왔는지
+4. 보는 방향·화면 속 위치가 설계(위치)와 크게 다른지
+5. 크기 관계가 이상한지
+6. 그림 안에 글자·숫자·서명이 들어갔는지
+7. 손가락 개수·팔다리처럼 모양이 망가진 곳
+장면 설계: ${JSON.stringify({보이는것: s.ko, action: s.action, 위치: s.layout_ko || s.layout, 카메라: s.shot})}
+나오는 인물·사물: ${JSON.stringify(cast)}
+문제는 많아야 4개, 중요한 순서로. what: 무엇이 틀렸는지 한국어로 짧게. fix: 이 그림을 고칠 때 그대로 넣을 한국어 요청 한 문장 (예: "왼쪽 아래 여자아이를 지워 줘", "네모에게 웃는 눈과 입을 그려 줘").
+문제가 없으면 problems 는 빈 배열.
+JSON으로만: {"problems":[{"what":"","fix":""}]}`;
+}
+async function checkScene(s, quiet){
+  if (!aiKey()){ if (!quiet) keyReady(); return; }
+  const img = await idb.get('scene:' + s.id);
+  if (!img){ if (!quiet) toast('검사할 그림이 없습니다'); return; }
+  await ensureHist(s);
+  const hid = s.cur, sheets = [];
+  for (const c of arr(proj.bible && proj.bible.cast).filter(c => s.cast.includes(c.id))){
+    if (sheets.length >= 3) break;
+    const b = await idb.get(castKey(c)); if (b) sheets.push({c, b});
+  }
+  // 검사 결과는 그림마다 따로 남긴다(s.qcs[그림 번호]) — 내력에서 예전 그림으로 돌아가도 그 그림의 결과가 다시 보이게
+  const setQ = v => { s.qcs = s.qcs || {}; s.qcs[hid] = v; Object.keys(s.qcs).forEach(k => { if (!arr(s.hist).some(h => h.id === k)) delete s.qcs[k]; }); };
+  setQ({wait: true}); renderQC(s);
+  try{
+    const parts = [await blobPart(img)];
+    for (const x of sheets) parts.push(await blobPart(x.b));
+    parts.push({text: qcPrompt(s, sheets)});
+    const {json} = await aiJSON(parts);
+    setQ({at: Date.now(), problems: arr(json.problems).map(p => ({what: str(p && p.what), fix: str(p && p.fix)})).filter(p => p.what).slice(0, 4)});
+  }catch(e){ setQ({at: Date.now(), err: e.message || String(e)}); }
+  saveProj(); renderQC(s);
+}
+// 이미 검사한 그림(내력에서 다시 고른 것)은 다시 돈 들여 검사하지 않는다
+const qcOf = s => s.cur && s.qcs ? s.qcs[s.cur] : null;
+const autoQC = s => { const q = qcOf(s); return knotCfg().autoCheck === false || (q && !q.err && !q.wait) ? Promise.resolve() : checkScene(s, true); };
+function renderQC(s){
+  const box = document.querySelector(`.scene[data-id="${s.id}"] [data-qc]`); if (!box) return;
+  const q = qcOf(s);
+  if (!q){ box.innerHTML = ''; return; }
+  if (q.wait){ box.innerHTML = '<div class="qc wait">🔍 AI가 그림을 검사하는 중…</div>'; return; }
+  if (q.err){ box.innerHTML = `<div class="qc wait">🔍 검사를 못 했어요 — ${esc(q.err)} <button class="btn" data-act="qc">다시 검사</button></div>`; return; }
+  if (!arr(q.problems).length){ box.innerHTML = '<div class="qc ok">🔍 검사 통과 — 설정과 눈에 띄게 다른 곳이 없어요</div>'; return; }
+  box.innerHTML = `<div class="qc bad"><b>🔍 AI 검사: 고칠 곳 ${q.problems.length}개</b>
+    <ul>${q.problems.map((p, k) => `<li>${esc(p.what)}${p.fix ? ` <button class="btn" data-act="qcfix" data-q="${k}">고치기 칸에 넣기</button>` : ''}</li>`).join('')}</ul>
+    <div class="hint" style="margin-top:6px">AI 검사라 틀릴 수 있어요. 괜찮으면 그냥 두셔도 돼요.</div></div>`;
 }
 
 /* ---------- 내보내기 ---------- */
@@ -1422,6 +1906,7 @@ function openSettings(){
   const k = knotCfg();
   $('#cfgAi').value = k.ai; $('#cfgGptKey').value = k.gptKey; $('#cfgGptModel').value = k.gptModel;
   $('#cfgImgModel').value = k.imgModel; $('#cfgImgQuality').value = k.imgQuality;
+  $('#cfgCandN').value = String(k.candN); $('#cfgCandQ').value = k.candQuality; $('#cfgAutoCheck').value = k.autoCheck ? 'on' : 'off';
   $('#cfgKey').value = apiKey(); $('#dlgSettings').showModal();
 }
 $('#btnSettings').onclick = openSettings;
@@ -1429,8 +1914,10 @@ $('#cfgCancel').onclick = () => $('#dlgSettings').close();
 $('#cfgSave').onclick = () => {
   const c = memoCfg(); c.key = $('#cfgKey').value.trim(); store.set('nuema_cfg_v1', c);
   store.set('nuema_knot_cfg_v1', {ai: $('#cfgAi').value, gptKey: $('#cfgGptKey').value.trim(), gptModel: $('#cfgGptModel').value,
-    imgModel: $('#cfgImgModel').value, imgQuality: $('#cfgImgQuality').value});
+    imgModel: $('#cfgImgModel').value, imgQuality: $('#cfgImgQuality').value,
+    candN: +$('#cfgCandN').value, candQuality: $('#cfgCandQ').value, autoCheck: $('#cfgAutoCheck').value === 'on'});
   $('#dlgSettings').close(); toast('저장했습니다');
+  document.querySelectorAll('[data-act=cands]').forEach(b => { b.textContent = `🎲 후보 ${knotCfg().candN}장`; });
 };
 
 /* ---------- 구도 스케치 ----------
@@ -1483,7 +1970,7 @@ $('#skSave').onclick = async () => {
    지우기 전에 실제로 몇 개가 지워지고 무엇이 남는지 세어서 보여 주고, 지운 뒤 15초 동안은 되돌릴 수 있게
    지우기 직전 작품(글·설정표·장면)과 그림(장면·전 그림·설정 그림)을 통째로 기억해 둔다 */
 const imgKeys = p => [
-  ...arr(p.scenes).flatMap(s => ['scene:' + s.id, 'undo:' + s.id, 'sketch:' + s.id]),
+  ...arr(p.scenes).flatMap(sceneKeys),
   ...arr(p.bible && p.bible.cast).map(c => `cast:${p.id}:${c.id}`)
 ];
 async function workCount(p = proj){
