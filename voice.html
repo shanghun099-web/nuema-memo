@@ -309,9 +309,11 @@ dialog h3{font-family:var(--serif);font-weight:400;margin:0 0 6px}
       <div class="row">
         <button class="btn main" id="joinBtn">합쳐서 듣기</button>
         <button class="btn" id="dlBtn" disabled>voice.wav 받기</button>
+        <button class="btn main" id="driveBtn" disabled>☁ 누에마쇼츠에 올리기</button>
       </div>
       <audio id="allAudio" controls hidden></audio>
       <div class="clip" id="joinInfo"></div>
+      <div class="clip" id="driveInfo"></div>
     </div>
   </section>
 </div>
@@ -1085,7 +1087,7 @@ async function join(){
   lastJoin = wavBlob(all);
   const a = $('#allAudio'); if (a.src) URL.revokeObjectURL(a.src);
   a.src = URL.createObjectURL(lastJoin); a.hidden = false;
-  $('#dlBtn').disabled = false;
+  $('#dlBtn').disabled = false; $('#driveBtn').disabled = false;
   $('#joinInfo').className = 'clip ' + (missing ? 'bad' : 'ok');
   $('#joinInfo').textContent = `전체 ${fmtSec(secs(all))} · 빠르기 ${speed.toFixed(2)}배` + (tuned ? ` · 높이 맞춘 조각 ${tuned}개` : '') + (missing ? ` — 아직 안 만든 ${missing}조각은 빠졌습니다` : '');
 }
@@ -1095,6 +1097,44 @@ $('#dlBtn').onclick = () => {
   document.body.appendChild(a); a.click(); a.remove();
   setTimeout(() => URL.revokeObjectURL(a.href), 4000);
   toast('voice.wav 를 받았습니다. 쇼츠 공장 public 폴더에 넣으세요');
+};
+
+/* ---------- ☁ 누에마쇼츠에 올리기 ----------
+   합친 voice.wav 를 매듭짓기 그림과 같은 드라이브 폴더 "누에마쇼츠/<작품 제목>/voice.wav" 로 보낸다.
+   메모 탭의 구글 스크립트(v5, 매듭짓기 ☁ 올리기와 같은 bkFile)를 그대로 쓴다. 같은 이름이 있으면 새것으로 바뀜(예전 것은 휴지통) */
+const driveUrl = () => { const u = str(memoCfg().gdocUrl); return /^https:\/\/script\.google\.com\/macros\/s\/[\w-]+\/exec$/.test(u) ? u : ''; };
+const b64Of = b => new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(String(r.result).split(',')[1]); r.onerror = rej; r.readAsDataURL(b); });
+async function scriptJSON(res){
+  const t = await res.text();
+  try{ return JSON.parse(t); }catch(e){
+    if (/<!doctype|<html/i.test(t)) throw new Error('구글이 로그인 페이지를 돌려줬습니다. 배포 관리에서 액세스 권한이 "모든 사용자"인지 확인해 주세요');
+    throw new Error('스크립트 응답을 읽지 못했습니다');
+  }
+}
+let driving = false;
+$('#driveBtn').onclick = async () => {
+  if (driving || !lastJoin) return;
+  const url = driveUrl(), info = $('#driveInfo');
+  if (!url) return alert('메모 탭 → 설정의 "Apps Script 웹앱 URL"이 비어 있어요.\n구글 독스·드라이브 백업에 쓰는 그 주소를 먼저 넣어 주세요.');
+  // 폴더 이름 = 매듭짓기에서 지금 열린 작품 제목 (그림을 올린 그 폴더). 다르면 여기서 고친다
+  const sub = prompt('누에마쇼츠 안의 어느 폴더에 올릴까요? (매듭짓기에서 그림을 올린 작품 제목과 같으면 같은 폴더에 들어가요)', knotScript().title || '');
+  if (sub === null) return;
+  const name = sub.trim() || '제목 없음', b = $('#driveBtn'), label = b.textContent;
+  driving = true; b.disabled = true; b.textContent = '올리는 중… (몇십 초)';
+  info.className = 'clip'; info.textContent = '';
+  try{
+    const v = (await scriptJSON(await fetch(url))).v || 0;
+    if (v < 5) throw new Error('구글 스크립트가 예전 판이에요(v5 필요). 매듭짓기 탭의 ☁ 드라이브 올리기를 한 번 누르면 바꾸는 방법이 나와요');
+    const d = await scriptJSON(await fetch(url, {method: 'POST', body: JSON.stringify({action: 'bkFile', sub: name, name: 'voice.wav', mime: 'audio/wav', data: await b64Of(lastJoin)})}));
+    if (!d.ok) throw new Error(d.error || '스크립트가 실패를 돌려줬습니다');
+    info.className = 'clip ok';
+    info.innerHTML = `☁ 올렸어요 — 누에마쇼츠/${esc(name)}/voice.wav (${fmtSec(lastJoin.size / 2 / SR)}).${d.url ? ` <a href="${esc(d.url)}" target="_blank" rel="noopener">드라이브에서 보기</a>` : ''} 다시 합친 뒤 또 누르면 새것으로 바뀌어요`;
+    toast('누에마쇼츠에 올렸습니다');
+  }catch(e){
+    info.className = 'clip bad'; info.textContent = '⚠ 못 올렸어요: ' + (e.message || e);
+    toast('올리기 실패 — ' + (e.message || e));
+  }
+  driving = false; b.disabled = false; b.textContent = label;
 };
 
 /* ---------- 키 ---------- */
