@@ -143,6 +143,18 @@ dialog h3{font-family:var(--serif);font-weight:400;margin:0 0 6px}
 .picbtns{display:flex;flex-direction:column;gap:6px;align-items:flex-start}
 .row.paid{margin-top:8px;gap:6px;align-items:center}
 .paidtag{flex-basis:100%;font-size:.74rem;color:var(--ink-3)}
+.direct{margin-top:14px;background:var(--paper-2);border:1px solid var(--line);border-radius:8px;padding:10px 12px}
+.direct summary,.reading summary{font-size:.86rem;cursor:pointer}
+.direct textarea{font-size:.84rem;line-height:1.6;min-height:260px;margin-top:8px}
+.exlist{margin:6px 0 0;padding:0;list-style:none;font-size:.8rem}
+.exlist li{display:flex;gap:8px;align-items:flex-start;padding:6px 0;border-top:1px solid var(--line)}
+.exlist li span{flex:1}
+.exlist .x{background:none;border:none;color:var(--shu);font-size:.8rem;padding:0 4px}
+.reading{margin-top:12px;background:#FFF8EC;border:1px solid #EBD9B8;border-radius:8px;padding:10px 12px}
+.reading label.f{margin-top:8px}
+.reading textarea{font-size:.86rem;min-height:44px}
+.scene .top .star{background:none;border:none;font-size:.82rem;color:var(--ink-3);padding:2px 4px}
+.scene .top .star.on{color:#C98A12;font-weight:600}
 .scene.waiting .getimg{background:var(--shu);border-color:var(--shu);color:#fff}
 .undo .btn{background:var(--paper);color:var(--ink);border-color:var(--paper);padding:5px 12px}
 </style>
@@ -200,10 +212,20 @@ dialog h3{font-family:var(--serif);font-weight:400;margin:0 0 6px}
       <option value="auto">AI가 글 흐름에 맞게 (보통 4~7장면)</option>
       <option>3</option><option>4</option><option>5</option><option>6</option><option>7</option><option>8</option><option>10</option>
     </select>
+    <details class="direct" id="directBox">
+      <summary>🖋 누에마 연출 노트 — 장면을 나눌 때마다 AI가 먼저 읽어요 <span id="exCount" style="color:var(--ink-3)"></span></summary>
+      <p class="hint" style="margin-top:6px">누에마의 글과 지난 영상을 읽고 쓴 첫 초안이에요. "이건 아니야"는 지우고, 생각나는 건 더 적어 주세요. 모든 작품에 같이 쓰여요.</p>
+      <textarea id="directNote" aria-label="누에마 연출 노트"></textarea>
+      <div class="row" style="margin-top:6px"><button class="btn warn" id="directReset">처음 초안으로 되돌리기</button></div>
+      <h3 style="margin-top:14px;font-size:.9rem">⭐ 좋은 예 <span class="hint" style="font-size:.76rem">장면 카드의 ☆ 를 누르면 여기 모여요. 다음 작품부터 AI가 이 결을 따라가요 (최근 6개)</span></h3>
+      <ul class="exlist" id="exList"></ul>
+    </details>
     <div class="row" style="margin-top:12px">
-      <button class="btn main" id="btnSplit">장면 나누기</button>
+      <button class="btn ai" id="btnRead">① 글 먼저 읽기</button>
+      <button class="btn main" id="btnSplit">② 장면 나누기</button>
     </div>
-    <p class="hint">AI는 글을 고치지 않고 자르기만 합니다. 자막 한 줄 단위로 끊고, 뜻이 바뀌는 곳에서 장면을 나눕니다.</p>
+    <p class="hint">① AI가 글을 먼저 읽고 누가 말하는지·핵심 마음·비유·깨달음을 한국어로 정리해요. 맞게 고친 뒤 ②를 누르면 그 뜻대로 나눠요. AI는 글을 고치지 않고 자르기만 합니다.</p>
+    <div id="readingBox"></div>
     <div class="row" style="margin-top:8px" id="projResetRow" hidden>
       <button class="btn warn" id="projReset">↺ 이 작품 처음 상태로 (글만 남기기)</button>
     </div>
@@ -505,7 +527,7 @@ $('#refFile').onchange = async e => { const f = e.target.files[0]; if (!f) retur
 $('#refDel').onclick = async () => { await idb.del(refKey()); showRef(); };
 
 /* ---------- 2. 글 ---------- */
-function fillText(){ $('#title').value = proj.title; $('#essay').value = proj.text; $('#sceneCount').value = proj.count; }
+function fillText(){ $('#title').value = proj.title; $('#essay').value = proj.text; $('#sceneCount').value = proj.count; if (typeof renderReading === 'function') renderReading(); }
 $('#title').oninput = e => { proj.title = e.target.value; saveProj(); renderExport(); };
 $('#essay').oninput = e => { proj.text = e.target.value; saveProj(); renderCheck(); };
 $('#sceneCount').onchange = e => { proj.count = e.target.value; saveProj(); };
@@ -537,6 +559,127 @@ function showErr(box, msg){
 const cardOf = s => document.querySelector(`.scene[data-id="${s.id}"]`);
 
 /* ---------- AI: 장면 나누기 + 설정표 ---------- */
+/* ---------- 🖋 누에마 연출 노트 · ① 글 먼저 읽기 · ⭐ 좋은 예 ----------
+   AI가 누에마가 어떤 작가인지 모르고 나누면 누구 글이든 비슷한 그림이 나온다. 그래서
+   ① 연출 노트(모든 작품 공통, 작가가 고침) ② 이 글을 먼저 읽은 정리(작품마다, 작가가 고침) ③ 작가가 ☆ 한 장면 설계 예
+   를 장면 나누기·다시 만들기·설정표 만들기에 같이 준다. 저장: nuema_direct_v1 = {note, examples:[...]}, 작품마다 proj.reading */
+const DIRECT_DEFAULT = `[누에마는 이런 작가]
+- 사물의 목소리를 빌려 사람의 마음을 말한다. 화자는 대개 버려지고 닳고 접히는 평범한 물건이다 (옷걸이, 늙은 비누, 짝 잃은 양말, 저금통, 엘리베이터 열림·닫힘 버튼, 바람을 잃은 부채, 종이 한 장).
+- 세계관 한 줄: 세상에서 조용히 닳아가는 것들은 사실 가장 깊이 사랑하고 있는 중이다.
+- 글의 흐름: 쓸모없어 보이는 외로움 → 접힘·닳음·깎임 → '비로소' 깨달음 → 조용한 회복. 마지막은 사람에게 건네는 질문이나 한 문장의 여운.
+- 회복은 다시 강해지는 것이 아니라 다시 부드러워지는 것. 상처는 흠집이 아니라 곡선이 되는 과정.
+
+[장면을 나눌 때]
+- 감정이 꺾이는 말('하지만', '그러던 어느 날', '그날 이후', '문득', '비로소')에서 나눈다. 깨달음이 오는 문장은 따로 한 장면으로 둔다.
+- 한 장면에는 한순간만. 결말(회복·깨달음)을 앞 장면에 미리 보여 주지 않는다.
+- 마지막 장면은 설명하지 말고 여운으로: 넓은 여백, 따뜻한 빛, 그 자리에 작게 놓인 화자.
+
+[그림으로 옮길 때]
+- 카메라는 화자(사물)의 눈높이와 자리에서. 사물은 가깝고 크게, 사람과 세상은 크고 조금 흐리게.
+- 사람은 화자가 아니면 손·어깨·발·뒷모습으로만 보여 준다. 얼굴을 크게 그리지 않는다. 손(거칠고 고단한 손, 맞잡는 손)은 누에마 글의 중요한 소재다.
+- 감정은 표정보다 빛(아침빛, 해질녘, 어둠 속 한 줄기 빛)과 여백, 그리고 사물의 상태(구겨짐, 닳음, 접힘, 갈라짐, 먼지)로 보여 준다.
+- 글 속 비유는 글자 그대로 그리지 않고 눈에 보이는 하나의 장면으로 바꾼다. 예: 추억 → 글씨에서 김처럼 피어오르는 옅은 장면들, 접힌 마음 → 접힌 부채살 사이로 가려진 미소.
+- 의인화된 화자에게는 작은 얼굴이 있어도 좋지만 과장하지 않는다: 점 같은 눈, 작은 입, 몸의 기울기와 자세로 감정을 보여 준다.
+- 배경은 실제 한국의 생활 공간(욕실 구석, 어두운 옷장 안, 엘리베이터, 골목, 창가 책상)을 조용하고 따뜻하게.
+- 같은 사물이 모든 장면에 이어지고, 그 사물의 상태 변화(닳음·접힘·회복)가 장면마다 눈에 보이게 한다.`;
+const directStore = () => Object.assign({note: DIRECT_DEFAULT, examples: []}, store.get('nuema_direct_v1', {}));
+const saveDirect = d => store.set('nuema_direct_v1', d);
+const directNote = () => str(directStore().note);
+function directBlock(){
+  const note = directNote();
+  return note ? `\n[작가 누에마의 연출 노트 — 반드시 따라]\n${note}\n` : '';
+}
+const READ_FIELDS = [
+  ['speaker', '누가 말하나', '어떤 사물(또는 사람)이 화자인지, 무엇을 느끼는지'],
+  ['heart', '핵심 마음 한 줄', '이 글이 독자에게 건네는 마음'],
+  ['turn', '깨달음·반전', '어느 문장에서 무엇을 깨닫는지'],
+  ['metaphors', '비유 → 그림', '글 속 비유와 그것을 그림으로 옮길 방법, 줄마다 하나'],
+  ['flow', '감정의 흐름', '예: 외로움 → 무너짐 → 깨달음 → 조용한 회복'],
+  ['motifs', '이어지는 사물·상태 변화', '장면마다 반복해서 보여 줄 것과 어떻게 변하는지'],
+  ['ending', '마지막 장면의 여운', '마지막 그림에 남길 느낌']
+];
+function readingBlock(){
+  const r = proj.reading; if (!r) return '';
+  const lines = READ_FIELDS.map(([k, label]) => str(r[k]) && `- ${label}: ${str(r[k])}`).filter(Boolean);
+  return lines.length ? `\n[작가와 함께 먼저 읽은 이 글 — 작가가 확인한 뜻이니 그대로 따라]\n${lines.join('\n')}\n` : '';
+}
+function examplesBlock(){
+  const ex = arr(directStore().examples).slice(-6);
+  if (!ex.length) return '';
+  return `\n[작가가 마음에 들어 한 장면 설계 예 — 내용은 따라 하지 말고 이 결(시선·빛·여백·비유를 옮기는 방식)을 따라]\n${ex.map(e => JSON.stringify({작품: e.title, 자막: e.lines, ko: e.ko, action: e.action, shot: e.shot, 위치: e.layout, light: e.light})).join('\n')}\n`;
+}
+function readPrompt(){
+  return `너는 작가 누에마(Nouéma)의 글을 가장 깊이 읽는 편집자야. 아래 글을 장면으로 나누기 전에, 이 글의 뜻을 먼저 정리해줘. 작가가 읽고 고칠 거라 쉬운 한국어로 짧게.
+${directBlock()}
+JSON으로만 답해 (모두 한국어):
+{${READ_FIELDS.map(([k, , hint]) => `"${k}":"${hint}"`).join(',')}}
+metaphors 는 줄바꿈(\\n)으로 나눠. 글에 없는 내용은 지어내지 마.
+
+제목: ${proj.title || '(없음)'}
+
+본문:
+${proj.text.trim()}`;
+}
+function renderReading(){
+  const box = $('#readingBox'); if (!box) return;
+  const r = proj.reading;
+  if (!r){ box.innerHTML = ''; return; }
+  box.innerHTML = `<details class="reading" open><summary>📖 먼저 읽은 이 글 — 틀린 곳은 고쳐 주세요. ② 장면 나누기가 이대로 따라가요</summary>
+    ${READ_FIELDS.map(([k, label]) => `<label class="f">${label}</label><textarea data-r="${k}" rows="${k === 'metaphors' || k === 'motifs' ? 3 : 2}">${esc(r[k] || '')}</textarea>`).join('')}
+    <div class="row" style="margin-top:6px"><button class="btn warn" id="readDel">이 정리 지우기</button></div></details>`;
+  $('#readDel').onclick = () => { proj.reading = null; saveProj(); renderReading(); };
+}
+$('#readingBox').addEventListener('input', e => {
+  const k = e.target.dataset.r; if (!k || !proj.reading) return;
+  proj.reading[k] = e.target.value; saveProj();
+});
+$('#btnRead').onclick = async () => {
+  if (!proj.text.trim()) return toast('본문을 먼저 붙여넣으세요');
+  if (!keyReady()) return;
+  const b = $('#btnRead'); b.disabled = true; b.textContent = '글을 읽는 중… (20초쯤)';
+  try{
+    const {json} = await aiJSON([{text: readPrompt()}]);
+    const r = {}; READ_FIELDS.forEach(([k]) => { r[k] = str(json[k]); });
+    if (!READ_FIELDS.some(([k]) => r[k])) throw new Error('정리를 받지 못했습니다');
+    proj.reading = r; saveProj(); renderReading();
+    $('#readingBox').scrollIntoView({behavior: 'smooth', block: 'start'});
+    toast('글을 먼저 읽었어요. 틀린 곳을 고친 뒤 ② 장면 나누기를 누르세요');
+    showErr($('#stepText'), '');
+  }catch(e){ toast('실패 — ' + (e.message || e)); showErr($('#stepText'), e.message || String(e)); }
+  b.disabled = false; b.textContent = '① 글 먼저 읽기';
+};
+// 연출 노트 화면
+function renderDirect(){
+  const d = directStore();
+  if (document.activeElement !== $('#directNote')) $('#directNote').value = d.note;
+  const ex = arr(d.examples);
+  $('#exCount').textContent = ex.length ? `· ⭐ ${ex.length}` : '';
+  $('#exList').innerHTML = ex.length ? ex.slice().reverse().map(e => `<li><span><b>${esc(e.title || '제목 없음')}</b> · ${esc(e.ko || e.lines.slice(0, 40))}</span><button class="x" data-ex="${esc(e.id)}" aria-label="좋은 예에서 빼기">빼기</button></li>`).join('')
+    : '<li><span class="hint" style="margin:0">아직 없어요.</span></li>';
+}
+$('#directNote').oninput = e => { const d = directStore(); d.note = e.target.value; saveDirect(d); };
+$('#directReset').onclick = () => {
+  if (!confirm('연출 노트를 처음 초안으로 되돌릴까요? 고쳐 쓴 내용은 사라져요.')) return;
+  const d = directStore(); d.note = DIRECT_DEFAULT; saveDirect(d); $('#directNote').value = DIRECT_DEFAULT; toast('처음 초안으로 되돌렸어요');
+};
+$('#exList').addEventListener('click', e => {
+  const id = e.target.dataset.ex; if (!id) return;
+  const d = directStore(); d.examples = arr(d.examples).filter(x => x.id !== id); saveDirect(d); renderDirect(); renderScenes();
+});
+const exId = s => proj.id + ':' + s.id;
+const isStar = s => arr(directStore().examples).some(e => e.id === exId(s));
+function toggleStar(s){
+  const d = directStore(), id = exId(s);
+  if (arr(d.examples).some(e => e.id === id)){ d.examples = d.examples.filter(e => e.id !== id); toast('좋은 예에서 뺐어요'); }
+  else {
+    d.examples = arr(d.examples).concat({id, title: proj.title, lines: s.lines.join(' ').slice(0, 140), ko: s.ko, action: s.action, shot: s.shot, layout: s.layout_ko || s.layout, light: s.light, at: Date.now()}).slice(-12);
+    toast('⭐ 좋은 예로 모았어요. 다음 장면 나누기부터 이 결을 따라가요');
+  }
+  saveDirect(d); renderDirect();
+  const btn = cardOf(s) && cardOf(s).querySelector('.star');
+  if (btn){ const on = isStar(s); btn.classList.toggle('on', on); btn.textContent = on ? '★ 좋은 예' : '☆ 좋은 예로'; }
+}
+
 // 설정표 만드는 규칙 — 장면 나누기와 "설정표만 다시 만들기"가 같이 쓴다
 const BIBLE_RULES = `[이야기 설정표 bible — 모든 장면에 글자 그대로 반복해서 넣을 문장들]
 - cast: 두 장면 이상 나오는 인물과 중요한 사물. id(영문 소문자), type(사람·동물이면 "person" / 글이 사물을 의인화해서 그 사물이 느끼거나 말하거나 움직이는 등장인물이면 "character" / 그냥 물건이면 "object"), ko(한국어 이름), ko_desc(한국어 설명 한 줄), en(영어 고정 묘사 1~2문장: 나이·체형·머리·얼굴·옷과 색 / 사물은 재질·색·크기·특징 / character 는 사물 모양·재질·색을 그대로 살린 몸 + 얼굴(눈·입의 모양과 자리) + 팔다리가 있으면 그 모양까지, 예: A small square sheet of cream paper (#F3E9D2) that has come to life, with two dot eyes and a tiny curved mouth drawn in pencil near its top edge, and thin pencil-line arms and legs. 장면마다 달라지지 않는 것만. 옷·머리·사물의 주요 색은 색 이름 뒤에 HEX 코드를 붙여, 예: soft blue knit sweater (#5B7FA6). 사람은 마지막 문장에 몸에 지닌 것을 못 박아: 있는 것만 적고 "nothing else", 없으면 "No hat, glasses, jewelry or bag." 한쪽에만 있는 것은 왼쪽·오른쪽까지, 예: a silver watch on the LEFT wrist and nothing else). size(영어 한 줄: 실제 크기 cm + 사람 몸에 빗댄 크기. 예: about 40 cm long and as thin as a pencil, roughly the length of the woman's forearm. 사람은 키와 체형).
@@ -547,8 +690,8 @@ const BIBLE_RULES = `[이야기 설정표 bible — 모든 장면에 글자 그�
 - arc: 이야기 흐름에 따라 빛과 색이 어떻게 변하는지 (영어 한 문장, 예: from cold blue dawn to warm golden afternoon) / arc_ko: 한국어 한 줄`;
 function splitPrompt(hasRef){
   const n = proj.count === 'auto' ? '4~7개 (글 흐름에 맞게)' : `정확히 ${proj.count}개`;
-  return `너는 수채화 그림책처럼 이어지는 에세이 쇼츠의 장면 연출가야. 아래 산문을 장면으로 나누고, 모든 그림이 한 권의 그림책처럼 이어지도록 그림 설계를 해줘.
-${hasRef ? '\n첨부한 그림은 기준 그림이야. 원문에 등장하는 대상만 선택해. 그림체를 참고하고, 같은 인물이 실제로 등장할 때 그 외형을 참고해.\n' : ''}
+  return `너는 작가 누에마(Nouéma)의 에세이 쇼츠 '마음 배달부'의 장면 연출가야. 아래 산문을 장면으로 나누고, 모든 그림이 한 권의 수채화 그림책처럼 이어지도록 그림 설계를 해줘.
+${directBlock()}${readingBlock()}${examplesBlock()}${hasRef ? '\n첨부한 그림은 기준 그림이야. 원문에 등장하는 대상만 선택해. 그림체를 참고하고, 같은 인물이 실제로 등장할 때 그 외형을 참고해.\n' : ''}
 [글 자르기]
 1. 원문을 한 글자도 고치거나 빼거나 보태지 마. 순서도 그대로. 자르기만 해.
 2. 자막 한 줄 = 화면에 한 번 나오는 글. 대략 14~30자, 숨 쉬는 자리(쉼표·문장 끝·의미 단위)에서 끊어.
@@ -705,7 +848,7 @@ $('#btnSplit').onclick = async () => {
     else toast(`${scenes.length}개 장면으로 나눴습니다 (${used})`);
     showErr($('#stepText'), '');
   }catch(e){ toast('실패 — ' + (e.message || e)); showErr($('#stepText'), e.message || String(e)); }
-  b.disabled = false; b.textContent = '장면 나누기';
+  b.disabled = false; b.textContent = '② 장면 나누기';
 };
 
 /* 한 장면만 다시 설계 (요청 문장이 있으면 반영) */
@@ -713,8 +856,8 @@ async function redoScene(s, request){
   if (!keyReady()) return;
   const i = proj.scenes.indexOf(s), prev = proj.scenes[i - 1], next = proj.scenes[i + 1];
   const card = document.querySelector(`.scene[data-id="${s.id}"]`); card && card.classList.add('busy');
-  const prompt = `에세이 그림책의 장면 ${i + 1}/${proj.scenes.length} 하나만 다시 설계해줘. 설정표(bible)는 그대로 지키고, 앞뒤 장면과 이어지게.
-${request ? `\n작가의 요청: ${request}\n` : ''}
+  const prompt = `작가 누에마(Nouéma)의 에세이 그림책 장면 ${i + 1}/${proj.scenes.length} 하나만 다시 설계해줘. 설정표(bible)는 그대로 지키고, 앞뒤 장면과 이어지게.
+${directBlock()}${readingBlock()}${examplesBlock()}${request ? `\n작가의 요청: ${request}\n` : ''}
 설정표: ${JSON.stringify(proj.bible)}
 앞 장면: ${prev ? JSON.stringify({ko: prev.ko, action: prev.action, shot: prev.shot, light: prev.light}) : '(없음, 첫 장면)'}
 뒤 장면: ${next ? JSON.stringify({ko: next.ko, shot: next.shot}) : '(없음, 마지막 장면)'}
@@ -932,7 +1075,7 @@ function renderScenes(){
     <div class="scene" data-id="${s.id}">
       <div class="top">
         <span class="no">장면 ${pad(i + 1)}<small>${s.lines.length}줄</small>${i > 0 && s.same_place === false ? '<small class="placechg">📍 장소 바뀜</small>' : ''}</span>
-
+        ${s.ko ? `<button class="star${isStar(s) ? ' on' : ''}" data-act="star" title="마음에 드는 장면 설계를 좋은 예로 모아 다음 작품에 쓰기">${isStar(s) ? '★ 좋은 예' : '☆ 좋은 예로'}</button>` : ''}
       </div>
       <textarea class="lines" data-f="lines" aria-label="자막 줄 (한 줄에 하나)">${esc(s.lines.join('\n'))}</textarea>
       ${s.ko ? `<p class="desc"><b>그릴 장면</b>${esc(s.ko)}${s.cast.length ? ` <span style="color:var(--ink-3)">· ${s.cast.map(castName).map(esc).join(', ')}</span>` : ''}</p>` : '<p class="desc">아직 이 장면의 그림 설계가 없습니다. 아래 "다시 만들기"를 누르세요.</p>'}
@@ -1088,6 +1231,7 @@ $('#scenes').addEventListener('click', async e => {
       await copyText(scenePrompt(s)); toast(`장면 ${pad(i + 1)} 프롬프트를 복사했습니다`); break;
     case 'draw': drawScene(s); break;
     case 'share': shareScene(s, 'draw'); break;
+    case 'star': toggleStar(s); break;
     case 'sharefix': {
       const req = b.closest('.scene').querySelector('[data-edit]').value.trim();
       if (!req) return toast('그림에서 바꿀 것을 적어 주세요');
@@ -2144,7 +2288,8 @@ $('#projReset').onclick = async () => {
    AI가 새 설정표와 함께 장면마다 나오는 인물(cast)도 새 이름으로 다시 골라 준다. 실패하면 아무것도 바뀌지 않는다 */
 function biblePrompt(hasRef){
   const list = proj.scenes.map((s, i) => ({no: i + 1, lines: s.lines, ko: s.ko, action: s.action}));
-  return `너는 수채화 그림책처럼 이어지는 에세이 쇼츠의 장면 연출가야. 이 글은 이미 장면으로 나눠져 있어. 장면은 그대로 두고, 이야기 설정표(bible)만 처음부터 새로 만들어줘. 예전 설정표는 잊고 글과 장면만 보고 새로 정해.
+  return `너는 작가 누에마(Nouéma)의 에세이 쇼츠 장면 연출가야.${directBlock()}${readingBlock()}
+이 글은 이미 장면으로 나눠져 있어. 장면은 그대로 두고, 이야기 설정표(bible)만 처음부터 새로 만들어줘. 예전 설정표는 잊고 글과 장면만 보고 새로 정해.
 ${hasRef ? '\n첨부한 그림은 기준 그림이야. 원문에 등장하는 대상만 선택해. 그림체를 참고하고, 같은 인물이 실제로 등장할 때 그 외형을 참고해.\n' : ''}
 ${BIBLE_RULES}
 
@@ -2231,6 +2376,7 @@ if (navigator.storage && navigator.storage.persist) navigator.storage.persist().
 
 renderStyles();
 fillText();
+renderReading(); renderDirect();
 renderAll();
 renderProjects();
 checkInbox();
