@@ -139,6 +139,11 @@ dialog h3{font-family:var(--serif);font-weight:400;margin:0 0 6px}
 .qc .btn{padding:3px 10px;font-size:.74rem;margin-left:4px}
 #mkCanvas{display:block;width:100%;height:auto;border-radius:6px;touch-action:none;margin-top:8px;background:#fff;border:1px solid var(--line-2)}
 #pkImg{display:block;width:100%;border-radius:6px}
+/* ChatGPT 앱(구독)으로 그리기가 기본, GPT 키(요금)는 뒤로 */
+.picbtns{display:flex;flex-direction:column;gap:6px;align-items:flex-start}
+.row.paid{margin-top:8px;gap:6px;align-items:center}
+.paidtag{flex-basis:100%;font-size:.74rem;color:var(--ink-3)}
+.scene.waiting .getimg{background:var(--shu);border-color:var(--shu);color:#fff}
 .undo .btn{background:var(--paper);color:var(--ink);border-color:var(--paper);padding:5px 12px}
 </style>
 </head>
@@ -216,23 +221,23 @@ dialog h3{font-family:var(--serif);font-weight:400;margin:0 0 6px}
     </details>
     <h2 style="margin-top:26px"><span class="n">4</span>장면 한눈에 보기</h2>
     <details><summary>그리기 사용법</summary><div class="how">
-      <b>🎨 앱에서 바로 그리기 (GPT, 장당 요금)</b>
+      <b>📤 ChatGPT 앱으로 그리기 (구독, 추가 요금 없음 · 추천)</b>
       <ol>
-        <li>먼저 위 설정표에서 인물·사물마다 <b>🎨 설정 그림 만들기</b> (말하고 느끼는 사물은 종류를 <b>의인화</b>로)</li>
-        <li>구도가 걱정되면 <b>🎲 후보</b>로 싼 초안 여러 장 → 마음에 드는 것에 <b>✨ 좋게</b>. 바로 그리려면 <b>🎨 그리기</b></li>
-        <li>80% 마음에 들면 다시 그리지 말고 <b>💬 GPT로 고치기</b> — 대화처럼 이어서 고쳐요 ("조금 더 왼쪽", "아까보다 작게"). 한 곳만 바꾸려면 <b>🖌 칠한 곳만</b></li>
-        <li>그릴 때마다 <b>🔍 AI가 검사</b>해서 틀린 곳을 카드에 남겨요. 그렸던 그림은 전부 남아서 아래 줄에서 다시 고를 수 있어요</li>
+        <li>먼저 위 설정표에서 인물·사물마다 <b>📤 ChatGPT로</b> 설정 그림을 그려 <b>올리기</b> (말하고 느끼는 사물은 종류를 <b>의인화</b>로)</li>
+        <li>장면마다 <b>📤 ChatGPT로 그리기</b> → 공유 창에서 ChatGPT 고르기. 글과 기준 그림·설정 그림이 같이 넘어가요 (글이 비면 붙여넣기 — 복사해 뒀어요)</li>
+        <li>그림이 나오면 저장해서 <b>🖼 받은 그림 넣기</b>, 또는 복사해서 <b>📋 붙여넣기</b></li>
+        <li>고칠 땐 같은 ChatGPT 대화에서 이어서 말하거나, 고칠 것을 적고 <b>📤 ChatGPT에서 고치기</b></li>
+        <li>넣을 때마다 <b>🔍 Gemini 무료 키로 검사</b>해서 틀린 곳을 카드에 남겨요. 넣은 그림은 전부 남아서 아래 줄에서 다시 고를 수 있어요</li>
       </ol>
-      <b style="display:block;margin-top:8px">ChatGPT·Gemini 앱에서 그리기 (구독, 추가 요금 없음)</b>
+      <b style="display:block;margin-top:8px">💳 GPT 키로 바로 (장당 요금 — 정확하게 고쳐야 할 때만)</b>
       <ol>
-        <li>장면마다 <b>ChatGPT로</b>를 누르면 프롬프트가 들어간 새 대화가 열립니다. 기준 그림은 거기서 직접 첨부하세요</li>
-        <li>한 대화에서 이어 그리려면: 새 대화에 기준 그림과 <b>시작 메시지</b>를 넣고, 장면 프롬프트를 차례로 복사해 붙여넣기</li>
-        <li>받은 그림은 각 장면의 "그림 올리기"로 넣기</li>
+        <li><b>🖌 칠한 곳만</b>: 손가락으로 칠한 곳만 다시 그림 · <b>💬 GPT 키로 고치기</b>: 대화처럼 이어서 고침</li>
+        <li>자세히 고치기 안에 <b>🎨 그리기 · 🎲 후보</b>, 아래 <b>💳 전체 그리기</b></li>
       </ol>
     </div>
     </details>
     <div class="row" style="margin-top:12px">
-      <button class="btn main" id="btnDrawAll">🎨 전체 그리기</button>
+      <button class="btn" id="btnDrawAll">💳 전체 그리기 (GPT 키)</button>
       <button class="btn" id="btnCopyStart">시작 메시지 복사</button>
       <button class="btn" id="btnCopyAll">프롬프트 모두 복사</button>
     </div>
@@ -299,8 +304,10 @@ dialog h3{font-family:var(--serif);font-weight:400;margin:0 0 6px}
   <select id="cfgCandN"><option value="2">2장</option><option value="3">3장 (추천)</option><option value="4">4장</option></select>
   <label class="f" for="cfgCandQ">후보 품질 — 구도만 고르는 초안이라 싸게</label>
   <select id="cfgCandQ"><option value="low">낮음 — 장당 약 25원 (추천)</option><option value="medium">보통 — 장당 약 65원</option></select>
-  <label class="f" for="cfgAutoCheck">그린 뒤 🔍 AI 자동 검사</label>
-  <select id="cfgAutoCheck"><option value="on">켬 — 한 번에 몇 원 (추천)</option><option value="off">끔 — 🔍 검사를 누를 때만</option></select>
+  <label class="f" for="cfgAutoCheck">그림을 넣을 때마다 🔍 AI 자동 검사</label>
+  <select id="cfgAutoCheck"><option value="on">켬 (추천)</option><option value="off">끔 — 🔍 검사를 누를 때만</option></select>
+  <label class="f" for="cfgCheckAi">🔍 검사·📏 크기 재기에 쓸 AI</label>
+  <select id="cfgCheckAi"><option value="gemini">Gemini 무료 키 — 0원 (추천)</option><option value="ai">위에서 고른 글 AI</option></select>
 
   <h3 style="margin-top:18px;font-size:.95rem">Gemini</h3>
   <label class="f" for="cfgKey">Gemini API 키 — 누에마 메모와 같이 씀</label>
@@ -453,10 +460,14 @@ const memoCfg = () => store.get('nuema_cfg_v1', {});
 const apiKey = () => str(memoCfg().key);
 // 매듭짓기만의 AI 설정: 글은 GPT·Gemini 중 고르고, 그림 바로 그리기는 GPT 로
 const knotCfg = () => Object.assign({ai: 'gpt', gptKey: '', gptModel: 'gpt-6.1-sol', imgModel: 'gpt-image-2.5-flare', imgQuality: 'medium',
-  candN: 3, candQuality: 'low', autoCheck: true}, store.get('nuema_knot_cfg_v1', {}));
+  candN: 3, candQuality: 'low', autoCheck: true, checkAi: 'gemini'}, store.get('nuema_knot_cfg_v1', {}));
 const gptKey = () => str(knotCfg().gptKey);
 const aiName = () => knotCfg().ai === 'gpt' ? 'GPT' : 'Gemini';
 const aiKey = () => knotCfg().ai === 'gpt' ? gptKey() : apiKey();
+// 🔍 검사·📏 크기 재기는 Gemini 무료 키로 (요금 0원). Gemini 키가 없거나 설정에서 바꾸면 글 AI 로
+const checkByGemini = () => knotCfg().checkAi !== 'ai' && !!apiKey();
+const checkKey = () => checkByGemini() ? apiKey() : aiKey();
+const checkJSON = parts => checkByGemini() ? geminiJSON(parts) : aiJSON(parts);
 // 키가 없으면 알리고 설정을 연다 (gptOnly: 그림 그리기처럼 GPT 키가 꼭 있어야 할 때)
 function keyReady(gptOnly){
   if (gptOnly ? gptKey() : aiKey()) return true;
@@ -616,7 +627,7 @@ const cleanBible = b => ({
 /* 받은 장면 그림을 AI가 직접 보고 크기 기준을 만든다 — 첫 장면 그림을 "크기의 정답"으로 삼는 방식.
    그림 속 크기가 현실과 어긋나 보이면 warn 으로 알려 준다 (그 그림은 먼저 고친 뒤 다시 올리는 게 좋다) */
 async function scaleFromImage(s){
-  if (!keyReady()) return;
+  if (!checkKey()){ keyReady(); return; }
   const b = proj.bible; if (!b) return;
   const i = proj.scenes.indexOf(s);
   const img = await blobPart(await idb.get('scene:' + s.id));
@@ -633,7 +644,7 @@ async function scaleFromImage(s){
 이 장면 설명: ${s.action}
 JSON으로만: {"scale":"","scale_ko":"","sizes":{"<id>":""},"warn":""}`;
   try{
-    const {json} = await aiJSON([img, {text: prompt}]);
+    const {json} = await checkJSON([img, {text: prompt}]);
     applyScale(json);
     const warn = str(json.warn);
     if (warn) alert(`장면 ${pad(i + 1)} 그림으로 크기 기준을 만들었어요.\n\n그런데 이 그림에서 어색한 크기가 보여요:\n${warn}\n\n"받은 그림 조금 고치기"로 먼저 고친 뒤 다시 올리면 크기 기준도 다시 잡힙니다.`);
@@ -856,7 +867,7 @@ function renderBible(){
   if (!b){ box.innerHTML = '<p class="hint" style="margin:0">장면을 나누면 AI가 설정표를 만듭니다.</p>'; return; }
   box.innerHTML = `
     <h3>등장인물·반복되는 사물</h3>
-    <p class="hint" style="margin:2px 0 0">🎨 설정 그림을 만들어 두면, 그 인물·사물이 나오는 장면을 그릴 때 같이 보내서 모양이 흔들리지 않아요. 장면을 그리기 전에 먼저 만드세요.</p>
+    <p class="hint" style="margin:2px 0 0">📤 설정 그림을 만들어 두면, 그 인물·사물이 나오는 장면을 그릴 때 같이 보내서 모양이 흔들리지 않아요. 장면을 그리기 전에 먼저 만드세요.</p>
     ${b.cast.map((c, k) => `<div class="cast-item">
         <div class="name">${esc(c.ko || c.id)}
           <select class="kind" data-b="type" data-k="${k}" aria-label="${esc(c.ko || c.id)} 인물인지 사물인지">
@@ -868,7 +879,8 @@ function renderBible(){
         <div class="castpic">
           <div class="thumb" data-k="${k}">설정<br>그림 없음</div>
           <div class="row">
-            <button class="btn ai" data-castact="make" data-k="${k}">🎨 설정 그림 만들기</button>
+            <button class="btn ai" data-castact="share" data-k="${k}">📤 ChatGPT로</button>
+            <button class="btn" data-castact="make" data-k="${k}" title="GPT 키로 바로 (요금)">💳 바로 만들기</button>
             <label class="btn">올리기<input type="file" accept="image/*" data-castact="up" data-k="${k}" hidden></label>
             <button class="btn warn" data-castact="del" data-k="${k}">빼기</button>
           </div>
@@ -926,20 +938,33 @@ function renderScenes(){
       ${s.ko ? `<p class="desc"><b>그릴 장면</b>${esc(s.ko)}${s.cast.length ? ` <span style="color:var(--ink-3)">· ${s.cast.map(castName).map(esc).join(', ')}</span>` : ''}</p>` : '<p class="desc">아직 이 장면의 그림 설계가 없습니다. 아래 "다시 만들기"를 누르세요.</p>'}
       <div class="pic">
         <div class="img" data-act="view">그림<br>없음</div>
-        <button class="btn main" data-act="draw">🎨 그리기</button>
-        <button class="btn" data-act="cands">🎲 후보 ${+knotCfg().candN || 3}장</button>
+        <div class="picbtns">
+          <button class="btn main" data-act="share">📤 ChatGPT로 그리기</button>
+          <label class="btn getimg">🖼 받은 그림 넣기<input type="file" accept="image/*" data-act="upload" hidden></label>
+          <button class="btn getimg" data-act="paste">📋 복사한 그림 붙여넣기</button>
+        </div>
       </div>
+      <p class="hint" style="margin:6px 0 0">ChatGPT 구독으로 그려요 · 추가 요금 없음. 그림이 나오면 저장해서 🖼, 복사했으면 📋</p>
       <div data-qc></div>
       <div data-cands></div>
-      <label class="f">받은 그림 고치기 — 다시 그리지 말고 바꿀 것만. 대화처럼 이어서 말하면 앞에서 한 말을 기억해요</label>
+      <label class="f">받은 그림 고치기 — 바꿀 것만 적어요</label>
       <div class="row">
         <input type="text" data-edit placeholder="예: 컵을 왼쪽으로, 창밖을 더 밝게" aria-label="그림에서 바꿀 것" style="flex-basis:100%">
-        <button class="btn main" data-act="fix">💬 GPT로 고치기</button>
+        <button class="btn main" data-act="sharefix">📤 ChatGPT에서 고치기</button>
+      </div>
+      <div class="row paid">
+        <span class="paidtag">💳 정확하게 고쳐야 할 때만 — GPT 키, 요금 나가요</span>
         <button class="btn" data-act="mask">🖌 칠한 곳만</button>
+        <button class="btn" data-act="fix">💬 GPT 키로 고치기</button>
       </div>
       <div data-chat></div>
       <div class="hist" data-hist></div>
       <details><summary>자세히 고치기</summary>
+        <div class="row paid" style="margin-bottom:8px">
+          <span class="paidtag">💳 GPT 키로 바로 그리기 — 장당 요금</span>
+          <button class="btn" data-act="draw">🎨 그리기</button>
+          <button class="btn" data-act="cands">🎲 후보 ${+knotCfg().candN || 3}장</button>
+        </div>
         <span class="tools">
           ${i > 0 ? '<button data-act="merge">↑ 합치기</button>' : ''}
           <button data-act="cut" title="자막 칸에서 커서가 있는 줄부터 새 장면으로">여기서 나누기</button>
@@ -958,7 +983,7 @@ function renderScenes(){
       <div class="row" style="margin-top:8px">
 
         <button class="btn" data-act="copy">프롬프트 복사</button>
-        <button class="btn" data-act="chatgpt">ChatGPT로</button>
+        <button class="btn" data-act="chatgpt" title="공유가 안 될 때: 웹 ChatGPT 새 대화를 열어요 (그림은 직접 첨부)">웹 ChatGPT 열기</button>
       </div>
       <label class="f">프롬프트 고치기 — 그리기 전에 장면 설계를 바꿀 때</label>
       <div class="row">
@@ -979,7 +1004,6 @@ function renderScenes(){
         <label class="f samep"><input type="checkbox" data-f="same_place"${s.same_place === false ? '' : ' checked'}> 앞 장면과 같은 장소 (끄면 '자동'일 때 앞 장면 그림을 보내지 않아요)</label>` : ''}
       </details>
       <div class="row" style="margin-top:10px">
-        <label class="btn">그림 올리기<input type="file" accept="image/*" data-act="upload" hidden></label>
         <button class="btn" data-act="down">받기</button>
         <button class="btn" data-act="undo" title="그리기·고치기 바로 전 그림으로">↩ 전 그림</button>
         <button class="btn" data-act="qc" title="AI가 그림을 보고 설정과 다른 곳을 찾아요">🔍 검사</button>
@@ -987,7 +1011,7 @@ function renderScenes(){
       <button class="link" data-act="scaleimg" style="margin-top:6px">📏 이 그림으로 크기 기준 잡기${i === 0 ? ' (장면 01은 올리면 자동)' : ''}</button>
       </details>
     </div>`).join('');
-  proj.scenes.forEach(s => { showSceneImg(s.id); showSketch(s.id); showHist(s); renderCands(s); renderChat(s); renderQC(s); });
+  proj.scenes.forEach(s => { showSceneImg(s.id); showSketch(s.id); showHist(s); renderCands(s); renderChat(s); renderQC(s); if (s.id === waitId) cardOf(s).classList.add('waiting'); });
   renderCheck(); renderExport();
 }
 const skUrls = {};
@@ -1048,14 +1072,12 @@ $('#scenes').addEventListener('input', e => {
 });
 $('#scenes').addEventListener('keydown', e => {
   if (e.key === 'Enter' && e.target.matches('[data-ask]')){ e.preventDefault(); e.target.closest('.scene').querySelector('[data-act=redo]').click(); }
-  if (e.key === 'Enter' && e.target.matches('[data-edit]')){ e.preventDefault(); e.target.closest('.scene').querySelector(gptKey() ? '[data-act=fix]' : '[data-act=edit]').click(); }
+  if (e.key === 'Enter' && e.target.matches('[data-edit]')){ e.preventDefault(); e.target.closest('.scene').querySelector('[data-act=sharefix]').click(); }
 });
 $('#scenes').addEventListener('change', async e => {
   if (e.target.dataset.act !== 'upload') return;
   const s = sceneOf(e.target), f = e.target.files[0]; if (!s || !f) return;
-  e.target.value = ''; await addHist(s, f, 'up');
-  if (proj.scenes.indexOf(s) === 0 && proj.bible && aiKey()) scaleFromImage(s);   // 첫 장면 그림 = 크기의 정답
-  else toast('그림을 넣었습니다');
+  e.target.value = ''; await gotImage(s, f, 'up');
 });
 $('#scenes').addEventListener('click', async e => {
   const b = e.target.closest('[data-act]'); if (!b || b.tagName === 'INPUT') return;
@@ -1065,6 +1087,13 @@ $('#scenes').addEventListener('click', async e => {
     case 'copy':
       await copyText(scenePrompt(s)); toast(`장면 ${pad(i + 1)} 프롬프트를 복사했습니다`); break;
     case 'draw': drawScene(s); break;
+    case 'share': shareScene(s, 'draw'); break;
+    case 'sharefix': {
+      const req = b.closest('.scene').querySelector('[data-edit]').value.trim();
+      if (!req) return toast('그림에서 바꿀 것을 적어 주세요');
+      shareScene(s, 'fix', req); break;
+    }
+    case 'paste': pasteImage(s); break;
     case 'chatgpt': {
       // 주소에 글을 실어 새 대화를 연다. 폰 앱에선 글이 안 들어갈 수 있어 복사도 해 둔다
       const t = 'Please generate this image.\n\n' + scenePrompt(s, 'new');
@@ -1091,7 +1120,7 @@ $('#scenes').addEventListener('click', async e => {
       const input = b.closest('.scene').querySelector('[data-edit]');
       input.value = input.value.trim() ? `${input.value.trim()}, ${p.fix}` : p.fix;
       input.focus(); input.scrollIntoView({behavior: 'smooth', block: 'center'});
-      toast('고치기 칸에 넣었어요. 💬 GPT로 고치기를 누르세요'); break;
+      toast('고치기 칸에 넣었어요. 📤 ChatGPT에서 고치기를 누르세요'); break;
     }
     case 'undo': {
       if (s.prev && arr(s.hist).some(h => h.id === s.prev)){ await setCur(s, s.prev); toast('전 그림으로 바꿨습니다. 한 번 더 누르면 다시 돌아와요'); break; }
@@ -1174,7 +1203,7 @@ $('#btnDrawAll').onclick = async () => {
     if (!(await drawScene(s, true))) break;
     n++;
   }
-  drawingAll = false; b.textContent = '🎨 전체 그리기';
+  drawingAll = false; b.textContent = '💳 전체 그리기 (GPT 키)';
   toast(n === list.length ? `그림 ${n}장을 다 그렸습니다` : `그림 ${n}장을 그리고 멈췄습니다`);
 };
 $('#btnCopyStart').onclick = async () => { await copyText(startMessage()); toast('시작 메시지를 복사했습니다. 기준 그림과 함께 보내세요'); };
@@ -1288,6 +1317,7 @@ $('#bible').addEventListener('click', async e => {
   const k = +t.dataset.k, c = proj.bible.cast[k]; if (!c) return;
   if (t.classList.contains('thumb')){ if (t.dataset.url){ $('#bigImg').src = t.dataset.url; $('#dlgImg').showModal(); } return; }
   if (t.dataset.castact === 'make') makeCastSheet(k, t);
+  if (t.dataset.castact === 'share') shareCast(c);
   if (t.dataset.castact === 'del'){ await idb.del(castKey(c)); showCastImgs(); }
 });
 $('#bible').addEventListener('change', async e => {
@@ -1412,7 +1442,7 @@ async function gptImage(prompt, images, opt = {}){ return (await gptImages(promp
    지금 쓰는 그림은 예전처럼 scene:<장면> (드라이브 올리기·받기는 그대로), 그 번호가 s.cur, 바로 전 번호가 s.prev(↩ 전 그림).
    폰 저장 공간 때문에 장면마다 최근 HIST_MAX 장만 남긴다 (지금 그림·전 그림·고르는 중인 후보는 지우지 않음) */
 const HIST_MAX = 15;
-const KIND_KO = {old: '예전', draw: '그림', cand: '후보', hq: '좋게', fix: '고침', chat: '대화', mask: '칠함', up: '올림'};
+const KIND_KO = {old: '예전', draw: '그림', cand: '후보', hq: '좋게', fix: '고침', chat: '대화', mask: '칠함', up: '넣음', app: '붙여넣음'};
 const histKey = (s, hid) => `h:${s.id}:${hid}`;
 const sceneKeys = s => ['scene:' + s.id, 'undo:' + s.id, 'sketch:' + s.id, ...arr(s.hist).map(h => histKey(s, h.id))];
 async function delSceneData(s){ for (const k of sceneKeys(s)) await idb.del(k); }
@@ -1512,7 +1542,7 @@ async function drawScene(s, inLoop){
     const blob = await gptImage(scenePrompt(s, {refs}), refs.map(r => r.blob));
     await putSceneImg(s, blob, 'draw');
     cardBusy(s, false); showErr(cardOf(s), '');
-    if (i === 0 && proj.bible && aiKey()) await scaleFromImage(s);   // 첫 장면 그림 = 크기의 정답
+    if (i === 0 && proj.bible && checkKey()) await scaleFromImage(s);   // 첫 장면 그림 = 크기의 정답
     else toast(`장면 ${pad(i + 1)}을 그렸습니다`);
     await autoQC(s);
     return true;
@@ -1653,7 +1683,7 @@ function renderChat(s){
   const card = cardOf(s); if (!card) return;
   const box = card.querySelector('[data-chat]'), btn = card.querySelector('[data-act=fix]');
   const on = chatOn(s);
-  if (btn) btn.textContent = on ? '💬 이어서 고치기' : '💬 GPT로 고치기';
+  if (btn) btn.textContent = on ? '💬 이어서 고치기 (GPT 키)' : '💬 GPT 키로 고치기';
   if (!box) return;
   box.innerHTML = on ? `<div class="chatlog">💬 이 그림과 대화 중 — 다음 고치기는 앞에서 한 말을 기억해요
     <ol>${arr(s.chat.turns).map(x => `<li>${esc(x)}</li>`).join('')}</ol>
@@ -1758,6 +1788,88 @@ async function maskFix(s, req, img, mask){
   }catch(e){ cardBusy(s, false); toast('고치기 실패 — ' + (e.message || e)); showErr(cardOf(s), e.message || String(e)); }
 }
 
+/* ---------- 📤 ChatGPT 앱(구독)으로 그리기 · 📋 받은 그림 넣기 ----------
+   GPT 키는 장마다 요금이 나가서, 그리기는 구독 중인 ChatGPT 앱에서 하고 이 앱은 주고받기만 돕는다.
+   폰 공유 창으로 프롬프트 + 기준 그림·설정 그림(·스케치)을 한 번에 넘긴다. 공유 대상이 글을 버리는 경우가 있어 글은 늘 복사해 둔다.
+   공유를 못 하는 기기면 웹 ChatGPT 새 대화를 연다(그림은 직접 첨부). 보낸 장면은 돌아왔을 때 넣기 버튼을 주홍색으로 표시 */
+let waitId = null;
+const fileOf = (b, name) => new File([b], `${name}.${((b.type || 'image/png').split('/')[1] || 'png').replace('jpeg', 'jpg')}`, {type: b.type || 'image/png'});
+async function shareOut(text, blobs, what){
+  await copyText(text);
+  const files = blobs.map((b, k) => fileOf(b, `image${k + 1}`));
+  try{
+    if (navigator.share && (!files.length || (navigator.canShare && navigator.canShare({files})))){
+      await navigator.share(files.length ? {files, text} : {text});
+      toast(`${what} — 공유 창에서 ChatGPT를 고르세요. 글이 비어 있으면 붙여넣기 (복사해 뒀어요)`);
+      return true;
+    }
+  }catch(e){ if (e && e.name === 'AbortError') return false; }
+  window.open('https://chatgpt.com/?q=' + encodeURIComponent(text), '_blank', 'noopener');
+  toast(files.length ? `웹 ChatGPT를 열었어요. 그림 ${files.length}장(기준·설정 그림)은 직접 첨부해 주세요` : '웹 ChatGPT를 열었어요. 글이 비어 있으면 붙여넣기 하세요');
+  return true;
+}
+function markWait(s){
+  document.querySelectorAll('.scene.waiting').forEach(el => el.classList.remove('waiting'));
+  waitId = s ? s.id : null;
+  const card = s && cardOf(s); if (card) card.classList.add('waiting');
+}
+async function shareScene(s, kind, req){
+  const i = proj.scenes.indexOf(s);
+  let text, blobs;
+  if (kind === 'fix'){
+    const cur = await idb.get('scene:' + s.id);
+    if (!cur) return toast('고칠 그림이 없어요. 먼저 그림을 넣어 주세요');
+    const refs = (await sceneRefs(s, false)).filter(r => r.role === 'style' || r.role === 'cast');
+    const b = proj.bible || {};
+    text = [
+      'Please edit Image 1, an illustration from a picture book. Do not redraw it from scratch.',
+      'Keep the characters, their faces and clothes, the composition, the colors and the painting style exactly the same.',
+      `Change only this${hasKo(req) ? ' (the request is written in Korean)' : ''}: ${req}`,
+      refs.length && refs.map((r, k) => `Image ${k + 2} is ` + (r.role === 'style' ? 'the painting style and character reference.' : `the reference sheet for "${r.c.id}": use it for identity and follow the requested change for the current state.`)).join('\n'),
+      b.scale && `SIZE AND SCALE: ${b.scale}`,
+      RULES
+    ].filter(Boolean).join('\n\n');
+    blobs = [cur, ...refs.map(r => r.blob)];
+  } else {
+    const refs = await sceneRefs(s);
+    text = 'Please generate this image.\n\n' + scenePrompt(s, {refs});
+    blobs = refs.map(r => r.blob);
+  }
+  if (await shareOut(text, blobs, `장면 ${pad(i + 1)}`)) markWait(s);
+}
+async function shareCast(c){
+  const ref = await idb.get(refKey());
+  await shareOut('Please generate this image.\n\n' + castSheetPrompt(c, !!ref), ref ? [ref] : [], `'${c.ko || c.id}' 설정 그림`);
+  toast(`'${c.ko || c.id}' 설정 그림을 ChatGPT에서 그린 뒤 저장해서 "올리기"로 넣어 주세요`);
+}
+// ChatGPT 에서 받은 그림을 장면에 넣는다 (사진첩·붙여넣기 같이 씀): 내력에 남기고, 첫 장면이면 크기 기준, 그다음 검사
+async function gotImage(s, blob, kind){
+  await addHist(s, blob, kind);
+  if (waitId === s.id) markWait(null);
+  if (proj.scenes.indexOf(s) === 0 && proj.bible && checkKey()) await scaleFromImage(s);   // 첫 장면 그림 = 크기의 정답
+  else toast('그림을 넣었습니다');
+  await autoQC(s);
+}
+async function pasteImage(s){
+  let blob = null;
+  try{
+    for (const item of await navigator.clipboard.read()){
+      const type = item.types.find(x => x.startsWith('image/'));
+      if (type){ blob = await item.getType(type); break; }
+    }
+  }catch(e){
+    return toast('붙여넣기를 못 했어요 (클립보드 권한). 그림을 저장해서 🖼 받은 그림 넣기로 넣어 주세요');
+  }
+  if (!blob) return toast('복사된 그림이 없어요. ChatGPT에서 그림을 길게 눌러 복사하거나, 저장해서 🖼 로 넣어 주세요');
+  await gotImage(s, blob, 'app');
+}
+// ChatGPT 에 다녀오면 그 장면의 넣기 버튼으로 데려간다
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState !== 'visible' || !waitId) return;
+  const card = document.querySelector(`.scene[data-id="${waitId}"]`), btn = card && card.querySelector('.getimg');
+  if (btn) btn.scrollIntoView({behavior: 'smooth', block: 'center'});
+});
+
 /* ---------- 🔍 그린 뒤 AI 검사 ----------
    그림과 설정 그림을 같이 보여 주고 장면 설계와 눈에 띄게 다른 곳만 찾게 한다. 결과는 사라지지 않게 카드에 남긴다
    (그 그림이 지금 그림일 때만 보임). 문제마다 "고치기 칸에 넣기" → 💬 고치기로 바로 이어진다 */
@@ -1782,7 +1894,7 @@ function qcPrompt(s, sheets){
 JSON으로만: {"problems":[{"what":"","fix":""}]}`;
 }
 async function checkScene(s, quiet){
-  if (!aiKey()){ if (!quiet) keyReady(); return; }
+  if (!checkKey()){ if (!quiet) keyReady(); return; }
   const img = await idb.get('scene:' + s.id);
   if (!img){ if (!quiet) toast('검사할 그림이 없습니다'); return; }
   await ensureHist(s);
@@ -1798,7 +1910,7 @@ async function checkScene(s, quiet){
     const parts = [await blobPart(img)];
     for (const x of sheets) parts.push(await blobPart(x.b));
     parts.push({text: qcPrompt(s, sheets)});
-    const {json} = await aiJSON(parts);
+    const {json} = await checkJSON(parts);
     setQ({at: Date.now(), problems: arr(json.problems).map(p => ({what: str(p && p.what), fix: str(p && p.fix)})).filter(p => p.what).slice(0, 4)});
   }catch(e){ setQ({at: Date.now(), err: e.message || String(e)}); }
   saveProj(); renderQC(s);
@@ -1906,7 +2018,7 @@ function openSettings(){
   const k = knotCfg();
   $('#cfgAi').value = k.ai; $('#cfgGptKey').value = k.gptKey; $('#cfgGptModel').value = k.gptModel;
   $('#cfgImgModel').value = k.imgModel; $('#cfgImgQuality').value = k.imgQuality;
-  $('#cfgCandN').value = String(k.candN); $('#cfgCandQ').value = k.candQuality; $('#cfgAutoCheck').value = k.autoCheck ? 'on' : 'off';
+  $('#cfgCandN').value = String(k.candN); $('#cfgCandQ').value = k.candQuality; $('#cfgAutoCheck').value = k.autoCheck ? 'on' : 'off'; $('#cfgCheckAi').value = k.checkAi;
   $('#cfgKey').value = apiKey(); $('#dlgSettings').showModal();
 }
 $('#btnSettings').onclick = openSettings;
@@ -1915,7 +2027,7 @@ $('#cfgSave').onclick = () => {
   const c = memoCfg(); c.key = $('#cfgKey').value.trim(); store.set('nuema_cfg_v1', c);
   store.set('nuema_knot_cfg_v1', {ai: $('#cfgAi').value, gptKey: $('#cfgGptKey').value.trim(), gptModel: $('#cfgGptModel').value,
     imgModel: $('#cfgImgModel').value, imgQuality: $('#cfgImgQuality').value,
-    candN: +$('#cfgCandN').value, candQuality: $('#cfgCandQ').value, autoCheck: $('#cfgAutoCheck').value === 'on'});
+    candN: +$('#cfgCandN').value, candQuality: $('#cfgCandQ').value, autoCheck: $('#cfgAutoCheck').value === 'on', checkAi: $('#cfgCheckAi').value});
   $('#dlgSettings').close(); toast('저장했습니다');
   document.querySelectorAll('[data-act=cands]').forEach(b => { b.textContent = `🎲 후보 ${knotCfg().candN}장`; });
 };
